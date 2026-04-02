@@ -64,7 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const Icon(
                 Icons.fingerprint, // Icon suggesting security and identity
                 size: 90, 
-                color: Color(0xFF33D1EE), // Our Cyan tech accent
+                color: Color(0xFFF4F7F9), // Now it's Light Cool Grey!
               ),
               const SizedBox(height: 20),
               Text(

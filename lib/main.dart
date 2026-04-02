@@ -24,7 +24,7 @@ class FractalVaultApp extends StatelessWidget {
         textTheme: GoogleFonts.interTextTheme(Theme.of(context).textTheme),
         
         // The overall grounded, secure backdrop
-        scaffoldBackgroundColor: const Color(0xFFF4F7F9), // Light Cool Grey
+        scaffoldBackgroundColor: const Color(0xFF33D1EE), // Now it's Cyan!
 
         colorScheme: const ColorScheme(
           brightness: Brightness.light,
