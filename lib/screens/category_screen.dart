@@ -13,8 +13,6 @@ class CategoryScreen extends StatefulWidget {
 class _CategoryScreenState extends State<CategoryScreen> {
   final VaultService _vaultService = VaultService();
   String _selectedCategoryId = 'recent'; 
-  List<Map<String, dynamic>> _currentFiles = [];
-  bool _isLoading = true;
 
   final List<Map<String, dynamic>> _categories = [
     {"id": "recent", "title": "Recent Activity", "icon": Icons.access_time_filled},
@@ -25,30 +23,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
     {"id": "video", "title": "Video Evidence", "icon": Icons.movie},
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _fetchTimelineData();
-  }
-
-  Future<void> _fetchTimelineData() async {
-    setState(() => _isLoading = true);
-    List<Map<String, dynamic>> fetchedFiles;
-    
-    if (_selectedCategoryId == 'recent') {
-      fetchedFiles = await _vaultService.getRecentFiles();
-    } else {
-      List<Map<String, dynamic>> allFiles = await _vaultService.getVaultFiles();
-      fetchedFiles = allFiles.where((file) => file['type'] == _selectedCategoryId).toList();
-    }
-
-    if (mounted) {
-      setState(() {
-        _currentFiles = fetchedFiles;
-        _isLoading = false;
-      });
-    }
-  }
+  // We deleted _fetchTimelineData and the initState because the StreamBuilder handles everything!
 
   // *** UPDATED: MASSIVE ICON VARIETY FOR DOODLES ***
   List<IconData> _getCategoryDoodles() {
@@ -89,6 +64,18 @@ class _CategoryScreenState extends State<CategoryScreen> {
           Icons.track_changes, Icons.hourglass_empty, Icons.published_with_changes,
           Icons.av_timer, Icons.restore
         ];
+    }
+  }
+
+  // A helper function to decide which stream to listen to based on the selected category
+  Stream<List<Map<String, dynamic>>> _getCorrectStream() {
+    if (_selectedCategoryId == 'recent') {
+      return _vaultService.getRecentFiles();
+    } else {
+      // If a specific category is selected, we map the stream to filter out the irrelevant files
+      return _vaultService.getVaultFiles().map(
+        (allFiles) => allFiles.where((file) => file['type'] == _selectedCategoryId).toList()
+      );
     }
   }
 
@@ -157,8 +144,8 @@ class _CategoryScreenState extends State<CategoryScreen> {
                     return GestureDetector(
                       onTap: () {
                         if (!isSelected) {
+                          // Update state; the StreamBuilder automatically hears this and switches pipelines!
                           setState(() => _selectedCategoryId = category['id']);
-                          _fetchTimelineData();
                         }
                       },
                       child: AnimatedContainer(
@@ -190,20 +177,39 @@ class _CategoryScreenState extends State<CategoryScreen> {
 
               const SizedBox(height: 30),
 
-              // FILE LIST TIMELINE
+              // THE MAGIC STREAM BUILDER: Listens directly to Firebase
               Expanded(
-                child: _isLoading
-                    ? const Center(child: CircularProgressIndicator(color: Color(0xFF0D2137)))
-                    : _currentFiles.isEmpty
-                        ? const Center(child: Text("No files found.", style: TextStyle(color: Colors.white54)))
-                        : ListView.builder(
-                            padding: const EdgeInsets.only(left: 20, right: 20, bottom: 90), 
-                            itemCount: _currentFiles.length,
-                            itemBuilder: (context, index) {
-                              final file = _currentFiles[index];
-                              return _buildTimelineCard(file, colors);
-                            },
-                          ),
+                child: StreamBuilder<List<Map<String, dynamic>>>(
+                  stream: _getCorrectStream(), // Switches based on selected pill
+                  builder: (context, snapshot) {
+                    // 1. Loading state
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator(color: Color(0xFF0D2137)));
+                    }
+
+                    // 2. Error State
+                    if (snapshot.hasError) {
+                      return const Center(child: Text("Decryption Error", style: TextStyle(color: Colors.redAccent)));
+                    }
+
+                    // 3. Extract Data
+                    final files = snapshot.data ?? [];
+
+                    // 4. Empty State
+                    if (files.isEmpty) {
+                       return const Center(child: Text("No files found.", style: TextStyle(color: Colors.white54)));
+                    }
+
+                    // 5. Build the list live!
+                    return ListView.builder(
+                      padding: const EdgeInsets.only(left: 20, right: 20, bottom: 90), 
+                      itemCount: files.length,
+                      itemBuilder: (context, index) {
+                        return _buildTimelineCard(files[index], colors);
+                      },
+                    );
+                  },
+                )
               ),
             ],
           ),
@@ -213,6 +219,19 @@ class _CategoryScreenState extends State<CategoryScreen> {
   }
 
   Widget _buildTimelineCard(Map<String, dynamic> file, ColorScheme colors) {
+    // Need to handle timestamp conversion safely in case data is still processing
+    String addedDate = "Encrypting...";
+    String accessedDate = "Pending";
+    
+    // Firestore stores dates as Timestamps, we need to convert them
+    if (file['dateAdded'] != null) {
+        // Just grabbing a simple string format for now to keep it clean
+        addedDate = file['dateAdded'].toDate().toString().split(' ')[0]; 
+    }
+
+    // Safely pulling the filename you logged in dashboard_screen
+    String fileName = file['name'] ?? "Unknown Artifact";
+
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
       child: Row(
@@ -233,10 +252,10 @@ class _CategoryScreenState extends State<CategoryScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(file['fileName'], style: TextStyle(color: colors.primary, fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text(fileName, style: TextStyle(color: colors.primary, fontSize: 16, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   Text(
-                    "Added: ${file['dateAdded']}\nAccessed: ${file['lastAccessed']}",
+                    "Added: $addedDate\nStatus: ${file['status'] ?? 'Active'}",
                     style: TextStyle(color: colors.primary.withOpacity(0.6), fontSize: 12, height: 1.4),
                   ),
                 ],
@@ -283,7 +302,7 @@ class CodeDoodleBackground extends StatelessWidget {
             itemCount: 100,
             itemBuilder: (context, index) {
               return Transform.rotate(
-                angle: (index % 2 == 0) ? 0.2 : -0.2, // Alternating tilt for variety
+                angle: (index % 2 == 0) ? 0.2 : -0.2, 
                 child: Icon(
                   icons[index % icons.length],
                   size: 26,
