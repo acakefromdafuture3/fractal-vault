@@ -14,6 +14,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "1055908299914-3jsaqp1fllfndfsq53h2gel8us52kk3r.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.fractal_vault",
+            "certificate_hash": "83b270861fecfa2e3ffa94427e8449f9c832122c"
+          }
+        },
+        {
+          "client_id": "1055908299914-ikije1lqo72edcqvqbekfejufdetur7h.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.fractal_vault",
+            "certificate_hash": "5da7d28fab504dec0c029a422e8f7595e793531f"
+          }
+        },
+        {
           "client_id": "1055908299914-mb1sclurk7em4usif5j86tpd1vr1bau5.apps.googleusercontent.com",
           "client_type": 3
         }
@@ -29,6 +45,13 @@
             {
               "client_id": "1055908299914-mb1sclurk7em4usif5j86tpd1vr1bau5.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "1055908299914-f1mvuas1u1otm178nnrp59dgfqgsdotp.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.fractalVault"
+              }
             }
           ]
         }
