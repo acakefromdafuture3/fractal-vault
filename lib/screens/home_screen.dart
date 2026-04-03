@@ -12,34 +12,24 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
   final SecurityService _securityService = SecurityService();
-  Map<String, dynamic>? _healthData;
-  bool _isLoading = true;
   late AnimationController _pulseController;
 
   @override
   void initState() {
     super.initState();
+    // 1. Set up the glowing pulse animation
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
-    _fetchData();
+    
+    // We completely removed the database initialization from here!
   }
 
   @override
   void dispose() {
     _pulseController.dispose();
     super.dispose();
-  }
-
-  Future<void> _fetchData() async {
-    final data = await _securityService.getVaultHealth();
-    if (mounted) {
-      setState(() {
-        _healthData = data;
-        _isLoading = false;
-      });
-    }
   }
 
   @override
@@ -65,11 +55,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         // LAYER 2: High-Tech Doodles
         const HomeDoodleBackground(),
 
-        // LAYER 3: UI Content
+        // LAYER 3: UI Content wrapped in the LIVE STREAM
         SafeArea(
-          child: _isLoading 
-            ? const Center(child: CircularProgressIndicator(color: Color(0xFF90CAFF)))
-            : SingleChildScrollView(
+          child: StreamBuilder<Map<String, dynamic>>(
+            stream: _securityService.getSystemStats(),
+            builder: (context, snapshot) {
+              // Show your custom loading spinner while connecting
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator(color: Color(0xFF90CAFF)));
+              }
+
+              // Extract the live data (or use safe defaults)
+              final stats = snapshot.data ?? {};
+              final int score = stats['securityScore'] ?? 0;
+              final String status = score >= 90 ? "SECURE" : "WARNING"; // Auto-calculate status
+
+              return SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
@@ -83,12 +84,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     ),
                     const SizedBox(height: 30),
 
-                    // GLOWING HEALTH GAUGE
-                    _buildHealthGauge(colors),
+                    // GLOWING HEALTH GAUGE (Passing the live score and status)
+                    _buildHealthGauge(score, status),
 
                     const SizedBox(height: 40),
 
-                    // COLOR-CODED DATA GRID
+                    // COLOR-CODED DATA GRID (Passing live stats)
                     GridView.count(
                       crossAxisCount: 2,
                       shrinkWrap: true,
@@ -97,25 +98,24 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       crossAxisSpacing: 16,
                       childAspectRatio: 0.95, 
                       children: [
-                        _buildStatCard("Total Files", _healthData!['totalFiles'].toString(), Icons.folder_zip, const Color(0xFFFFCA28)), 
-                        _buildStatCard("Active Shards", _healthData!['activeFragments'].toString(), Icons.extension, const Color(0xFFB388FF)), 
-                        _buildStatCard("Threats Blocked", _healthData!['threatsBlocked'].toString(), Icons.gpp_bad, const Color(0xFFFF5252)), 
-                        _buildStatCard("Last Scan", _healthData!['lastScan'].toString().split(' ')[1], Icons.radar, const Color(0xFFAED581)), 
+                        _buildStatCard("Total Files", '${stats['totalFiles'] ?? 0}', Icons.folder_zip, const Color(0xFFFFCA28)), 
+                        _buildStatCard("Active Shards", '${stats['activeShards'] ?? 0}', Icons.extension, const Color(0xFFB388FF)), 
+                        _buildStatCard("Threats Blocked", '${stats['threatsBlocked'] ?? 0}', Icons.gpp_bad, const Color(0xFFFF5252)), 
+                        _buildStatCard("Last Scan", '${stats['lastScan'] ?? '--:--'}', Icons.radar, const Color(0xFFAED581)), 
                       ],
                     ),
                     const SizedBox(height: 100), 
                   ],
                 ),
-              ),
+              );
+            },
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildHealthGauge(ColorScheme colors) {
-    final score = _healthData!['score'] as int;
-    final status = _healthData!['status'] as String;
-    
+  Widget _buildHealthGauge(int score, String status) {
     return AnimatedBuilder(
       animation: _pulseController,
       builder: (context, child) {
@@ -137,7 +137,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // 👇 BOOM! Increased size from 40 to 68 so it looks much more prominent
               const Icon(Icons.shield_rounded, color: Color(0xFF90CAFF), size: 68),
               const SizedBox(height: 8),
               Text(
@@ -146,7 +145,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               ),
               const SizedBox(height: 5),
               Text(
-                status.toUpperCase(),
+                status,
                 style: const TextStyle(color: Color(0xFF90CAFF), fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: 2),
               ),
             ],
