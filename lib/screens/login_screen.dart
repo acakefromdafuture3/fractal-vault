@@ -2,7 +2,8 @@
 
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
-import 'dashboard_screen.dart'; 
+import 'dashboard_screen.dart';
+import 'register_screen.dart'; // Import the new register screen
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -14,32 +15,55 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final AuthService _authService = AuthService(); 
+  final AuthService _authService = AuthService();
   bool _isLoading = false;
 
   void _handleLogin() async {
+    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      _showError("Please fill in all fields.");
+      return;
+    }
+
     setState(() => _isLoading = true);
-    
-    bool success = await _authService.login(
-      email: _emailController.text,
-      password: _passwordController.text,
+
+    // FIX: Calling the correct Firebase method from your service
+    var user = await _authService.loginWithEmail(
+      _emailController.text.trim(),
+      _passwordController.text.trim(),
     );
 
-    if(mounted) setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
 
-    if (success) {
+    if (user != null) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const DashboardScreen()),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Access Denied. Please verify credentials."),
-          backgroundColor: Color(0xFFE05252), 
-        ),
-      );
+      _showError("Access Denied. Please verify credentials.");
     }
+  }
+
+ void _handleGoogleSignIn() async {
+    setState(() => _isLoading = true);
+    var user = await _authService.signInWithGoogle();
+    if (mounted) setState(() => _isLoading = false);
+
+    if (user != null) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const DashboardScreen()),
+      );
+    } else {
+      // 👇 NOW IT WILL ACTUALLY TELL YOU IT FAILED
+      _showError("Google Auth Failed: Check Terminal or Firebase Setup.");
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: const Color(0xFFE05252)),
+    );
   }
 
   @override
@@ -48,22 +72,16 @@ class _LoginScreenState extends State<LoginScreen> {
     final colors = theme.colorScheme;
 
     return Scaffold(
-      extendBodyBehindAppBar: true, 
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
       body: Container(
-        height: double.infinity, 
+        height: double.infinity,
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              colors.primary, 
-              Colors.white,   
-            ],
-            stops: const [0.1, 0.85], 
+            colors: [colors.primary, Colors.white],
+            stops: const [0.1, 0.85],
           ),
         ),
         child: SafeArea(
@@ -74,40 +92,26 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(
-                    Icons.fingerprint,
-                    size: 90, 
-                    color: Color(0xFF90CAFF), 
-                  ),
+                  const Icon(Icons.fingerprint, size: 90, color: Color(0xFF90CAFF)),
                   const SizedBox(height: 20),
                   Text(
                     "Fractal Vault",
                     textAlign: TextAlign.center,
                     style: theme.textTheme.headlineLarge?.copyWith(
-                      color: Colors.white, 
+                      color: Colors.white,
                       fontWeight: FontWeight.w800,
-                      letterSpacing: 1.2, 
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    "Secure Identity Verification",
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFF90CAFF).withOpacity(0.8), 
+                      letterSpacing: 1.2,
                     ),
                   ),
                   const SizedBox(height: 60),
-
                   _buildSecureInput(
                     controller: _emailController,
                     labelText: "Auth ID / Email",
-                    hintText: "Enter your vault ID",
+                    hintText: "Enter your email",
                     icon: Icons.person_outline,
                     colors: colors,
                   ),
                   const SizedBox(height: 20),
-                  
                   _buildSecureInput(
                     controller: _passwordController,
                     labelText: "Security Key / Password",
@@ -116,34 +120,44 @@ class _LoginScreenState extends State<LoginScreen> {
                     obscureText: true,
                     colors: colors,
                   ),
-                  const SizedBox(height: 10),
-                  
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () {}, 
-                      child: Text("Recover Security Key", style: TextStyle(color: colors.primary.withOpacity(0.8))),
-                    ),
-                  ),
                   const SizedBox(height: 40),
-
-                  _isLoading 
+                  _isLoading
                       ? const Center(child: CircularProgressIndicator())
-                      : SizedBox(
-                          height: 55,
-                          child: ElevatedButton(
-                            onPressed: _handleLogin,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: colors.primary, 
-                              foregroundColor: Colors.white,
-                              elevation: 4, 
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            SizedBox(
+                              height: 55,
+                              child: ElevatedButton(
+                                onPressed: _handleLogin,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: colors.primary,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                child: const Text("Access Vault", style: TextStyle(fontWeight: FontWeight.bold)),
+                              ),
                             ),
-                            child: const Text(
-                              "Access Vault",
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1),
+                            const SizedBox(height: 15),
+                            // Google Sign In Button
+                            OutlinedButton.icon(
+                              onPressed: _handleGoogleSignIn,
+                              icon: const Icon(Icons.login, size: 18),
+                              label: const Text("Sign in with Google"),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: colors.primary,
+                                side: BorderSide(color: colors.primary),
+                                padding: const EdgeInsets.symmetric(vertical: 15),
+                              ),
                             ),
-                          ),
+                            const SizedBox(height: 20),
+                            TextButton(
+                              onPressed: () {
+                                Navigator.push(context, MaterialPageRoute(builder: (context) => const RegisterScreen()));
+                              },
+                              child: const Text("New Operative? Create Account"),
+                            ),
+                          ],
                         ),
                 ],
               ),
@@ -167,36 +181,17 @@ class _LoginScreenState extends State<LoginScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Text(
-            labelText,
-            style: const TextStyle(
-              color: Colors.white, 
-              fontWeight: FontWeight.w600,
-              fontSize: 14,
-            ),
-          ),
+          child: Text(labelText, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         ),
         Container(
-          decoration: BoxDecoration(
-            color: Colors.white, 
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.06), 
-                blurRadius: 8,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
           child: TextField(
             controller: controller,
             obscureText: obscureText,
-            style: TextStyle(color: Colors.grey.shade800, fontSize: 16),
             decoration: InputDecoration(
-              hintText: hintText, 
-              hintStyle: TextStyle(color: Colors.grey.shade400),
-              prefixIcon: Icon(icon, color: colors.primary.withOpacity(0.6)),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              hintText: hintText,
+              prefixIcon: Icon(icon, color: colors.primary.withOpacity(0.5)),
+              border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
             ),
           ),

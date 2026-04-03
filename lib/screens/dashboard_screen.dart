@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'category_screen.dart'; 
+import 'home_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -18,11 +19,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final colors = Theme.of(context).colorScheme;
 
     // THE MASTER LIST OF PAGES
+ // THE MASTER LIST OF PAGES (Exactly 4 items)
     final List<Widget> pages = [
-      _buildPlaceholderScreen("Biometric Health", Icons.health_and_safety_outlined, colors, "home"),
-      const CategoryScreen(), 
-      _buildPlaceholderScreen("Security Firewall", Icons.security_rounded, colors, "security"),
-      _buildPlaceholderScreen("System Protocols", Icons.admin_panel_settings_outlined, colors, "settings"),
+      const HomeScreen(), // ✅ Index 0: Replaced the placeholder with the REAL Home Screen!
+      const CategoryScreen(), // Index 1: The Vault Archives
+      _buildPlaceholderScreen("Security Firewall", Icons.security_rounded, colors, "security"), // Index 2
+      _buildPlaceholderScreen("System Protocols", Icons.admin_panel_settings_outlined, colors, "settings"), // Index 3
     ];
 
     return Scaffold(
