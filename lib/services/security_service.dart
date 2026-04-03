@@ -1,52 +1,45 @@
-// Location: lib/services/security_service.dart
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class SecurityService {
-  
-  // 1. Data for the Home "Health Overview" Screen
-  Future<Map<String, dynamic>> getVaultHealth() async {
-    // Simulating a system scan delay
-    await Future.delayed(const Duration(milliseconds: 600));
-    
-    return {
-      "status": "Secure",
-      "score": 98,
-      "lastScan": "2026-04-02 19:30",
-      "totalFiles": 14,
-      "activeFragments": 56, // 14 files split into 4 shards each!
-      "threatsBlocked": 2
-    };
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  // 1. THE LIVE DATA PIPELINE (For Tista's Home Screen)
+  Stream<Map<String, dynamic>> getSystemStats() {
+    return _db
+        .collection('system_stats')
+        .doc('current_status')
+        .snapshots() // This is the magic word that keeps the pipe open
+        .map((snapshot) {
+      
+      if (snapshot.exists && snapshot.data() != null) {
+        return snapshot.data() as Map<String, dynamic>;
+      } else {
+        // Safe fallback if the database is completely empty
+        return {
+          'securityScore': 0,
+          'totalFiles': 0,
+          'activeShards': 0,
+          'threatsBlocked': 0,
+          'lastScan': 'System Offline',
+        };
+      }
+    });
   }
 
-  // 2. Data for the Security Logs Timeline
-  Future<List<Map<String, String>>> getAccessLogs() async {
-    // Simulating database fetch delay
-    await Future.delayed(const Duration(milliseconds: 800));
+  // 2. THE INITIALIZER (Run this ONCE to set up the database)
+  Future<void> initializeDefaultStats() async {
+    final docRef = _db.collection('system_stats').doc('current_status');
     
-    return [
-      {
-        "event": "Login Success", 
-        "ip": "192.168.1.45 (Local)", 
-        "status": "success",
-        "time": "Today, 19:05"
-      },
-      {
-        "event": "File Shard Sync: Node 3", 
-        "ip": "Internal Network", 
-        "status": "info",
-        "time": "Today, 18:45"
-      },
-      {
-        "event": "Unauthorized Login Attempt", 
-        "ip": "103.44.12.9 (Unknown)", 
-        "status": "warning", // Tista can make the timeline dot RED for this!
-        "time": "Today, 04:20"
-      },
-      {
-        "event": "Fragment Reassembly: Aadhar_Card.pdf", 
-        "ip": "192.168.1.45 (Local)", 
-        "status": "success",
-        "time": "Yesterday, 21:15"
-      },
-    ];
+    final snapshot = await docRef.get();
+    if (!snapshot.exists) {
+      await docRef.set({
+        'securityScore': 98,
+        'totalFiles': 14,
+        'activeShards': 56,
+        'threatsBlocked': 2,
+        'lastScan': '19:30',
+      });
+      print("System: Database initialized with default vault stats.");
+    }
   }
 }
