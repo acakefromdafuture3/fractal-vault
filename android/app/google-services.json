@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "1055908299914",
+    "project_id": "fractal-vault",
+    "storage_bucket": "fractal-vault.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1055908299914:android:9a20a5e1918806013fd973",
+        "android_client_info": {
+          "package_name": "com.example.fractal_vault"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1055908299914-mb1sclurk7em4usif5j86tpd1vr1bau5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDupU16Hdj1aDI3YU-izuJdDis7Vzlst_A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1055908299914-mb1sclurk7em4usif5j86tpd1vr1bau5.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
