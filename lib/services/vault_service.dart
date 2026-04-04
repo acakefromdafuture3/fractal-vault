@@ -7,6 +7,7 @@ class VaultService {
   Stream<List<Map<String, dynamic>>> getVaultFiles() {
     return _db
         .collection('vault_files')
+        .where('isSecret', isEqualTo: false)
         .orderBy('dateAdded', descending: true)
         .snapshots()
         .map((snapshot) {
