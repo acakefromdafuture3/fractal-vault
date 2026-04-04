@@ -39,6 +39,7 @@ dependencies:
   cloud_firestore: ^6.2.0
   google_sign_in: 6.2.1
   file_picker: ^10.3.10
+  open_filex: ^4.7.0
 
 dev_dependencies:
   flutter_test:
