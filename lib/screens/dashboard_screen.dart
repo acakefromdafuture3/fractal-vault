@@ -38,7 +38,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         'extension': extension,
         'size': fileSize,
         'path': filePath, 
-        'status': 'Secured', 
+        'status': 'Secured',
+        'isSecret': false, 
         'dateAdded': FieldValue.serverTimestamp(),
       });
 
