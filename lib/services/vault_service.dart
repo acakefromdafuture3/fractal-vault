@@ -42,18 +42,19 @@ class VaultService {
     });
   }
 
-  // 3. THE TRANSLATOR ENGINE (Hidden from the UI)
+// 3. THE TRANSLATOR ENGINE (Hidden from the UI)
   String _normalizeCategory(String? rawType) {
     if (rawType == null) return 'unknown';
     
     String lowerType = rawType.toLowerCase();
 
     if (['jpg', 'jpeg', 'png'].contains(lowerType)) return 'image';
-    if (['pdf', 'doc', 'docx', 'txt'].contains(lowerType)) return 'document';
-    if (['mp4', 'mkv'].contains(lowerType)) return 'video';
-    if (['mp3', 'wav'].contains(lowerType)) return 'audio';
+    if (['pdf', 'doc', 'docx'].contains(lowerType)) return 'document'; // Removed 'txt' from here!
+    if (['txt', 'csv', 'md'].contains(lowerType)) return 'text';       // Added the dedicated text row!
+    if (['mp4', 'mkv', 'mov'].contains(lowerType)) return 'video';
+    if (['mp3', 'wav', 'm4a'].contains(lowerType)) return 'audio';
     
-    // If it's already "image" or "document", just pass it straight through
+    // If it already matches perfectly, let it through
     return lowerType; 
   }
 }
