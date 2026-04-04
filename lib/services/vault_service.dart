@@ -26,6 +26,7 @@ class VaultService {
   Stream<List<Map<String, dynamic>>> getRecentFiles() {
     return _db
         .collection('vault_files')
+        .where('isSecret', isEqualTo: false)
         .orderBy('dateAdded', descending: true) // Changed from lastAccessed!
         .limit(3)
         .snapshots()
