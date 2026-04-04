@@ -55,7 +55,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _mapExtensionToCategory(String ext) {
     if (['jpg', 'png', 'jpeg'].contains(ext.toLowerCase())) return 'image';
     if (['pdf', 'doc', 'docx'].contains(ext.toLowerCase())) return 'document';
-    if (['txt'].contains(ext.toLowerCase())) return 'text';
+    if (['txt','csv','md'].contains(ext.toLowerCase())) return 'text';
     if (['mp3', 'wav'].contains(ext.toLowerCase())) return 'audio';
     if (['mp4', 'mov'].contains(ext.toLowerCase())) return 'video';
     return 'document';
