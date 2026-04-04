@@ -1,9 +1,12 @@
+// Location: lib/screens/dashboard_screen.dart
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart'; 
 import 'category_screen.dart'; 
 import 'home_screen.dart';
+import '../widgets/doodle_background.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -18,6 +21,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _pickAndLogMetadata(ColorScheme colors) async {
     try {
+      // 🔥 THE FIX: Modern syntax, correctly formatted!
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf', 'txt', 'jpg', 'png', 'doc', 'docx'], 
@@ -43,9 +47,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         'dateAdded': FieldValue.serverTimestamp(),
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-         const SnackBar(content: Text("File Sharded & Logged!"), backgroundColor: Colors.green)
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+           const SnackBar(content: Text("File Sharded & Logged!"), backgroundColor: Colors.green)
+        );
+      }
     } catch (e) {
       debugPrint("Error: $e");
     } finally {
@@ -65,10 +71,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    
     final List<Widget> pages = [
       const HomeScreen(),
       const CategoryScreen(),
-      _buildPlaceholderScreen("Security Firewall", Icons.security_rounded, colors, "security"),
+      _buildPlaceholderScreen("Security Firewall", Icons.security_rounded, colors, "security"), 
       _buildPlaceholderScreen("System Protocols", Icons.admin_panel_settings_outlined, colors, "settings"),
     ];
 
@@ -112,77 +119,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // 🔥 THIS WAS THE MISSING METHOD!
-  Widget _buildPlaceholderScreen(String title, IconData mainIcon, ColorScheme colors, String type) {
-    List<IconData> doodleIcons = [Icons.lock, Icons.fingerprint, Icons.vpn_key, Icons.policy, Icons.gpp_good];
-    
+  Widget _buildPlaceholderScreen(String title, IconData icon, ColorScheme colors, String type) {
+    List<IconData> getDoodles() {
+      if (title == "System Protocols") {
+        return [Icons.settings, Icons.build, Icons.memory, Icons.tune, Icons.admin_panel_settings, Icons.developer_board];
+      } else if (title == "Security Firewall") {
+        return [Icons.security, Icons.lock, Icons.shield, Icons.vpn_key, Icons.verified_user];
+      }
+      return [Icons.code, Icons.data_object, Icons.terminal, Icons.bug_report];
+    }
+
     return Stack(
       children: [
         Container(
-          width: double.infinity,
+          height: double.infinity, width: double.infinity,
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter, end: Alignment.bottomCenter,
-              colors: [colors.primary, Colors.white], stops: const [0.2, 0.8],
+              colors: [colors.primary, Colors.white], stops: const [0.2, 0.8], 
             ),
           ),
         ),
-        // Helper widget defined in CategoryScreen or globally
-        const CategoryDoodleBackground(icons: [Icons.security, Icons.shield, Icons.lock]), 
         
-        SafeArea(
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(mainIcon, size: 80, color: const Color(0xFF90CAFF)),
-                ),
-                const SizedBox(height: 24),
-                Text(title, style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-                const SizedBox(height: 10),
-                Text(
-                  "SECURE PROTOCOL ACTIVE",
-                  style: TextStyle(color: const Color(0xFF90CAFF).withOpacity(0.7), fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
+        CodeDoodleBackground(icons: getDoodles()), 
+        
+        Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 80, color: const Color(0xFF90CAFF)),
+              const SizedBox(height: 20),
+              Text(
+                title, 
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 1.5)
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                "MODULE CURRENTLY OFFLINE", 
+                style: TextStyle(color: Colors.white54, fontFamily: 'Courier', letterSpacing: 2)
+              ),
+            ],
           ),
         ),
       ],
-    );
-  }
-}
-
-// Defining this globally so both screens can use it
-class CategoryDoodleBackground extends StatelessWidget {
-  final List<IconData> icons;
-  const CategoryDoodleBackground({super.key, required this.icons});
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: ShaderMask(
-        shaderCallback: (Rect bounds) => const LinearGradient(
-          begin: Alignment.topCenter, end: Alignment.bottomCenter,
-          colors: [Color(0xFF90CAFF), Color(0xFF0D2137)],
-        ).createShader(bounds),
-        blendMode: BlendMode.srcATop,
-        child: Opacity(
-          opacity: 0.1, 
-          child: GridView.builder(
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 5),
-            itemCount: 40,
-            itemBuilder: (context, index) => Icon(icons[index % icons.length], size: 24, color: Colors.white),
-          ),
-        ),
-      ),
     );
   }
 }
