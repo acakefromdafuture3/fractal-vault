@@ -16,7 +16,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
 
   final List<Map<String, dynamic>> _categories = [
     {"id": "recent", "title": "Recent Activity", "icon": Icons.access_time_filled},
-    {"id": "document", "title": "Encrypted PDFs", "icon": Icons.picture_as_pdf},
+    {"id": "document", "title": "Encrypted Documents", "icon": Icons.picture_as_pdf},
     {"id": "text", "title": "Text Records", "icon": Icons.text_snippet},
     {"id": "audio", "title": "Audio Logs", "icon": Icons.audiotrack},
     {"id": "image", "title": "Image Archives", "icon": Icons.image},
