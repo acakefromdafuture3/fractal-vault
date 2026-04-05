@@ -8,6 +8,7 @@ import 'category_screen.dart';
 import 'home_screen.dart';
 import 'security_logs_screen.dart'; // 🔥 BRINGING THE 3RD TAB BACK!
 import '../widgets/doodle_background.dart';
+import '../services/vault_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -25,7 +26,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       // 🔥 THE UPGRADE: Added allowMultiple: true
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['pdf', 'txt', 'jpg', 'png', 'doc', 'docx'], 
+        allowedExtensions: [
+          'pdf', 'txt', 'jpg', 'png', 'doc', 'docx', // Original
+          'mp4', 'mov', 'mkv', 'avi',                // 🔥 Unlocks Videos!
+          'mp3', 'wav', 'm4a', 'aac'                 // 🔥 Unlocks Audios!
+        ],
         allowMultiple: true, 
       );
 
@@ -42,16 +47,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         String extension = file.extension ?? fileName.split('.').last.toLowerCase();
         int fileSize = file.size;
 
-        await FirebaseFirestore.instance.collection('vault_files').add({
-          'name': fileName,
-          'type': _mapExtensionToCategory(extension),
-          'extension': extension,
-          'size': fileSize,
-          'path': filePath, 
-          'status': 'Secured',
-          'isSecret': false, 
-          'dateAdded': FieldValue.serverTimestamp(),
-        });
+       await VaultService().uploadFile(
+          name: fileName,
+          path: filePath,
+          extension: extension,
+          size: fileSize,
+          isSecret: false, 
+        );
       }
 
       if (mounted) {
