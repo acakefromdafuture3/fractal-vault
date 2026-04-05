@@ -54,6 +54,28 @@ class SecurityService {
       print("Backend Error - Failed to log breach: $e");
     }
   }
+  // 🔥 2.5 THE AUTHORIZED LOGGING PORTAL
+  Future<void> logAuthorizedAccess({
+    required String target,
+    required String ipAddress,
+    required String location,
+    required String deviceType,
+    required String accessedBy, // E.g., "Tista" or "Admin"
+  }) async {
+    try {
+      await _db.collection('security_logs').add({
+        'target': target,
+        'ipAddress': ipAddress,
+        'location': location,
+        'deviceType': deviceType,
+        'accessedBy': accessedBy,
+        'timestamp': FieldValue.serverTimestamp(),
+        'status': 'GRANTED', // 🔥 This word tells the UI to put it in the Green Tab!
+      });
+    } catch (e) {
+      print("Backend Error - Failed to log authorized access: $e");
+    }
+  }
 
   // 🔥 3. FETCH SECURITY LOGS (For Tista's New Screen)
   Stream<List<Map<String, dynamic>>> getSecurityLogs() {

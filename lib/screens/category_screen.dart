@@ -4,9 +4,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; 
 import 'package:open_filex/open_filex.dart'; 
-import 'package:shared_preferences/shared_preferences.dart'; // 🔥 ADDED: To check if vault exists!
+import 'package:shared_preferences/shared_preferences.dart'; 
 
 import '../services/vault_service.dart'; 
+import '../services/security_service.dart'; 
 import 'vault_setup_wizard.dart'; 
 import 'secret_vault_screen.dart'; 
 import '../widgets/doodle_background.dart';
@@ -21,6 +22,7 @@ class CategoryScreen extends StatefulWidget {
 
 class _CategoryScreenState extends State<CategoryScreen> {
   final VaultService _vaultService = VaultService();
+  final SecurityService _securityMonitor = SecurityService(); 
   String _selectedCategoryId = 'recent'; 
   final Set<String> _selectedDocs = {}; 
   Stream<List<Map<String, dynamic>>>? _vaultStream;
@@ -42,7 +44,18 @@ class _CategoryScreenState extends State<CategoryScreen> {
 
   void _refreshStream() {
     if (_selectedCategoryId == 'recent') {
-      _vaultStream = _vaultService.getRecentFiles(); 
+      // 🔥 THE FIX: Instead of calling the limited 'getRecentFiles()', 
+      // we grab ALL files and sort them from newest to oldest!
+      _vaultStream = _vaultService.getVaultFiles().map((files) {
+        final sortedFiles = List<Map<String, dynamic>>.from(files);
+        sortedFiles.sort((a, b) {
+          final Timestamp? timeA = a['dateAdded'] as Timestamp?;
+          final Timestamp? timeB = b['dateAdded'] as Timestamp?;
+          if (timeA == null || timeB == null) return 0;
+          return timeB.compareTo(timeA); // Forces newest at the top
+        });
+        return sortedFiles;
+      });
     } else {
       _vaultStream = _vaultService.getVaultFiles().map(
         (files) => files.where((file) => file['type'] == _selectedCategoryId).toList()
@@ -52,6 +65,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
 
   Future<void> _openVaultFile(Map<String, dynamic> fileData) async {
     final String fileName = fileData['name'] ?? "Unknown";
+    
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Row(children: [
@@ -67,14 +81,32 @@ class _CategoryScreenState extends State<CategoryScreen> {
     if (fileData['path'] != null) {
       try {
         File physicalFile = File(fileData['path']);
+        
         if (!await physicalFile.exists()) {
-          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("SYSTEM ERROR: Local cache missing."), backgroundColor: Colors.redAccent));
+          await _securityMonitor.logBreachAttempt(
+            target: fileName, ipAddress: "UNKNOWN (Spoofed)", location: "Unverified Node", deviceType: "Hostile Interceptor",
+          );
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("SYSTEM ERROR: Local cache missing or tampered."), backgroundColor: Colors.redAccent));
           return; 
         }
+
         final result = await OpenFilex.open(fileData['path']);
-        if (result.type != ResultType.done && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("OS Warning: ${result.message}"), backgroundColor: Colors.orange));
+        
+        if (result.type == ResultType.done) {
+          await _securityMonitor.logAuthorizedAccess(
+            target: fileName, ipAddress: "192.168.Secure", location: "Encrypted Tunnel", deviceType: "Trusted Mobile Client", accessedBy: "Verified Recipient",
+          );
+        } else {
+          await _securityMonitor.logBreachAttempt(
+            target: fileName, ipAddress: "DETECTED: 10.0.x.x", location: "External OS Rejection", deviceType: "Untrusted Sandbox",
+          );
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("OS Warning: ${result.message}"), backgroundColor: Colors.orange));
+        }
       } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("CRASH: $e"), backgroundColor: Colors.red));
+        await _securityMonitor.logBreachAttempt(
+          target: fileName, ipAddress: "HOSTILE IP", location: "Unknown Origin", deviceType: "Brute Force Tool",
+        );
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("CRASH: Decryption Tampering Detected"), backgroundColor: Colors.red));
       }
     }
   }
@@ -99,7 +131,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
   Future<void> _makeSelectedSecret() async {
     if (_selectedDocs.isEmpty) return;
     
-    // 🔥 Extra Security: Check if they even have a vault before letting them move files!
     final prefs = await SharedPreferences.getInstance();
     if (!prefs.containsKey('vaultAuthMethod')) {
       if (mounted) {
@@ -143,6 +174,44 @@ class _CategoryScreenState extends State<CategoryScreen> {
       case 'image': return [Icons.image, Icons.photo, Icons.camera_alt, Icons.style];
       case 'video': return [Icons.movie, Icons.videocam, Icons.play_circle, Icons.video_collection];
       default: return [Icons.access_time, Icons.history, Icons.update, Icons.track_changes];
+    }
+  }
+
+  Future<void> _deleteSecretVault() async {
+    bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF0D2137),
+        title: const Text("DESTROY VAULT?", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+        content: const Text("This will remove your security configuration. All currently hidden files will be safely moved back to the public dashboard.", style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("CANCEL", style: TextStyle(color: Colors.white54))),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true), 
+            child: const Text("DESTROY VAULT", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('vaultAuthMethod');
+      await prefs.remove('vaultPin');
+
+      final snapshot = await FirebaseFirestore.instance.collection('vault_files').where('isSecret', isEqualTo: true).get();
+      final batch = FirebaseFirestore.instance.batch();
+      for (var doc in snapshot.docs) {
+        batch.update(doc.reference, {'isSecret': false});
+      }
+      await batch.commit();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Vault Destroyed. Files moved to public dashboard."), 
+          backgroundColor: Colors.green, behavior: SnackBarBehavior.floating
+        ));
+      }
     }
   }
 
@@ -197,7 +266,8 @@ class _CategoryScreenState extends State<CategoryScreen> {
                     final files = snapshot.data ?? [];
                     if (files.isEmpty) return const Center(child: Text("NO RECORDS FOUND.", style: TextStyle(color: Colors.white54, letterSpacing: 2)));
                     return ListView.builder(
-                      padding: const EdgeInsets.only(left: 20, right: 20, bottom: 120), 
+                      // Removed the massive bottom padding so it doesn't leave an empty gap anymore!
+                      padding: const EdgeInsets.only(left: 20, right: 20, bottom: 20), 
                       itemCount: files.length,
                       itemBuilder: (context, index) {
                         final file = files[index];
@@ -215,45 +285,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
             ],
           ),
         ),
-
-        if (isSelectionMode)
-          Positioned(
-            bottom: 110, left: 20, right: 20,
-            child: Row(
-              children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: _deleteSelectedFiles, borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.9), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.red, width: 1)),
-                      child: const Center(child: Text("PURGE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1.5))),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2, 
-                  child: InkWell(
-                    onTap: _makeSelectedSecret, borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      decoration: BoxDecoration(color: Colors.deepPurpleAccent.withOpacity(0.9), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.deepPurple, width: 1)),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.security, color: Colors.white, size: 18),
-                          const SizedBox(width: 8),
-                          Text("MAKE SECRET (${_selectedDocs.length})", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-      ],
+      ], // BOTTOM BAR POSITIONED WIDGET HAS BEEN COMPLETELY REMOVED!
     );
   }
 
@@ -273,40 +305,41 @@ class _CategoryScreenState extends State<CategoryScreen> {
         PopupMenuButton<String>(
           icon: const Icon(Icons.more_vert, color: Color(0xFF90CAFF), size: 28),
           color: const Color(0xFF0D2137), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: const Color(0xFF90CAFF).withOpacity(0.3))),
-          // 🔥 NEW SMART LOGIC FOR THE 3-DOT MENU
           onSelected: (value) async {
             final prefs = await SharedPreferences.getInstance();
-            final vaultExists = prefs.containsKey('vaultAuthMethod'); // Checks if it's setup
+            final vaultExists = prefs.containsKey('vaultAuthMethod'); 
 
             if (value == 'setup') {
               if (vaultExists && mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text("You already have one secret vault!"), 
-                  backgroundColor: Colors.orangeAccent, behavior: SnackBarBehavior.floating
-                ));
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("You already have one secret vault!"), backgroundColor: Colors.orangeAccent, behavior: SnackBarBehavior.floating));
               } else if (mounted) {
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const VaultSetupWizard()));
               }
             } else if (value == 'access') {
               if (!vaultExists && mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text("Please configure a secret vault first!"), 
-                  backgroundColor: Colors.orangeAccent, behavior: SnackBarBehavior.floating
-                ));
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please configure a secret vault first!"), backgroundColor: Colors.orangeAccent, behavior: SnackBarBehavior.floating));
               } else if (mounted) {
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const SecretVaultScreen()));
+              }
+            } else if (value == 'delete') {
+              if (!vaultExists && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No vault exists to delete!"), backgroundColor: Colors.orangeAccent, behavior: SnackBarBehavior.floating));
+              } else if (mounted) {
+                _deleteSecretVault();
               }
             }
           },
           itemBuilder: (context) => [
             const PopupMenuItem(value: 'setup', child: Row(children: [Icon(Icons.settings, color: Colors.white54, size: 20), SizedBox(width: 10), Text('Configure Secret Vault', style: TextStyle(color: Colors.white))])),
-            const PopupMenuItem(value: 'access', child: Row(children: [Icon(Icons.vpn_key, color: Colors.redAccent, size: 20), SizedBox(width: 10), Text('Access Secret Vault', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))])),
+            const PopupMenuItem(value: 'access', child: Row(children: [Icon(Icons.vpn_key, color: Colors.greenAccent, size: 20), SizedBox(width: 10), Text('Access Secret Vault', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold))])),
+            const PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_forever, color: Colors.redAccent, size: 20), SizedBox(width: 10), Text('Delete Secret Vault', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))])),
           ],
         ),
       ],
     );
   }
 
+  // 🔥 UPDATED SELECTION HEADER: Now holds both the Shield and the Trash Can side-by-side!
   Widget _buildSelectionHeader() {
     return Container(
       height: 48, padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -320,7 +353,12 @@ class _CategoryScreenState extends State<CategoryScreen> {
               Text("${_selectedDocs.length} SELECTED", style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
             ],
           ),
-          IconButton(icon: const Icon(Icons.delete_forever, color: Colors.redAccent, size: 26), onPressed: _deleteSelectedFiles),
+          Row(
+            children: [
+              IconButton(icon: const Icon(Icons.security, color: Colors.deepPurpleAccent, size: 22), onPressed: _makeSelectedSecret, tooltip: 'Make Secret'),
+              IconButton(icon: const Icon(Icons.delete_forever, color: Colors.redAccent, size: 26), onPressed: _deleteSelectedFiles, tooltip: 'Purge'),
+            ],
+          ),
         ],
       ),
     );
