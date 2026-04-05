@@ -7,6 +7,7 @@ import 'category_screen.dart';
 import 'home_screen.dart';
 import '../widgets/doodle_background.dart';
 import '../services/vault_service.dart'; // 🔥 ADDED: Hooking into Ritankar's Engine
+import 'security_logs_screen.dart'; // 🔥 Add this near your other imports
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -63,7 +64,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final List<Widget> pages = [
       const HomeScreen(),
       const CategoryScreen(),
-      _buildPlaceholderScreen("Security Firewall", Icons.security_rounded, colors, "security"), 
+      const SecurityLogsScreen(),
       _buildPlaceholderScreen("System Protocols", Icons.admin_panel_settings_outlined, colors, "settings"),
     ];
 
