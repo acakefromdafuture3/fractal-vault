@@ -25,4 +25,48 @@ class SecurityService {
       }
     });
   }
+
+  // 🔥 2. THE BREACH LOGGING PORTAL (New!)
+  Future<void> logBreachAttempt({
+    required String target,
+    required String ipAddress,
+    required String location,
+    required String deviceType,
+  }) async {
+    try {
+      // Step A: Save the detailed log for the Security Logs Screen
+      await _db.collection('security_logs').add({
+        'target': target,
+        'ipAddress': ipAddress,
+        'location': location,
+        'deviceType': deviceType,
+        'timestamp': FieldValue.serverTimestamp(),
+        'status': 'BLOCKED',
+      });
+
+      // Step B: Automatically increment the 'threatsBlocked' stat for the Home Screen!
+      await _db.collection('system_stats').doc('current_status').set({
+        'threatsBlocked': FieldValue.increment(1),
+      }, SetOptions(merge: true));
+
+    } catch (e) {
+      // We use print here instead of debugPrint so you don't have to import flutter/material
+      print("Backend Error - Failed to log breach: $e");
+    }
+  }
+
+  // 🔥 3. FETCH SECURITY LOGS (For Tista's New Screen)
+  Stream<List<Map<String, dynamic>>> getSecurityLogs() {
+    return _db
+        .collection('security_logs')
+        .orderBy('timestamp', descending: true) // Newest attacks first
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) {
+        var data = doc.data();
+        data['logId'] = doc.id; // Always good practice to pass the ID
+        return data;
+      }).toList();
+    });
+  }
 }
