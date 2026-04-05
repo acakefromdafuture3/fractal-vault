@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart'; 
 import 'category_screen.dart'; 
 import 'home_screen.dart';
+import 'security_logs_screen.dart'; // 🔥 BRINGING THE 3RD TAB BACK!
 import '../widgets/doodle_background.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -82,7 +83,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final List<Widget> pages = [
       const HomeScreen(),
       const CategoryScreen(),
-      _buildPlaceholderScreen("Security Firewall", Icons.security_rounded, colors, "security"), 
+      const SecurityLogsScreen(),
       _buildPlaceholderScreen("System Protocols", Icons.admin_panel_settings_outlined, colors, "settings"),
     ];
 
