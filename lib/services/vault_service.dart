@@ -3,6 +3,31 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class VaultService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
+  // 🔥 THE MASTER UPLOAD PORTAL (Ritankar takes control!)
+  Future<void> uploadFile({
+    required String name,
+    required String path,
+    required String extension,
+    required int size,
+    required bool isSecret,
+  }) async {
+    
+    // 1. You handle the translation automatically!
+    String cleanType = _normalizeCategory(extension);
+
+    // 2. You safely write it to the database with all required fields
+    await _db.collection('vault_files').add({
+      'name': name,
+      'path': path,
+      'type': cleanType,
+      'extension': extension, 
+      'size': size,
+      'status': 'Secured',
+      'isSecret': isSecret, 
+      'dateAdded': FieldValue.serverTimestamp(),
+    });
+  }
+
   // 1. Fetch ALL files (Sorted by dateAdded to match Tista's UI)
   Stream<List<Map<String, dynamic>>> getVaultFiles() {
     return _db
@@ -23,12 +48,12 @@ class VaultService {
     });
   }
 
-  // 2. Fetch "Recent" files (UPDATED: Now sorts by dateAdded to prevent crashes!)
+  // 2. Fetch "Recent" files (Now sorts by dateAdded to prevent crashes!)
   Stream<List<Map<String, dynamic>>> getRecentFiles() {
     return _db
         .collection('vault_files')
         .where('isSecret', isEqualTo: false)
-        .orderBy('dateAdded', descending: true) // Changed from lastAccessed!
+        .orderBy('dateAdded', descending: true) 
         .limit(3)
         .snapshots()
         .map((snapshot) {

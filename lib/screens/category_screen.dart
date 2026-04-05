@@ -193,6 +193,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
                   stream: _vaultStream, 
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Color(0xFF90CAFF)));
+                    if (snapshot.hasError) return Center(child: Text("ERROR: ${snapshot.error}", style: const TextStyle(color: Colors.red)));
                     final files = snapshot.data ?? [];
                     if (files.isEmpty) return const Center(child: Text("NO RECORDS FOUND.", style: TextStyle(color: Colors.white54, letterSpacing: 2)));
                     return ListView.builder(

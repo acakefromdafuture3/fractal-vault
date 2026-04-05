@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'dart:io'; 
+import 'package:open_filex/open_filex.dart';
 // 🔥 FIXED PATHS: Added ../services/ to tell Flutter where they actually live
 import '../services/vault_service.dart'; 
 import 'secret_vault_screen.dart'; 
@@ -177,6 +178,7 @@ class _MainVaultScreenState extends State<MainVaultScreen> {
               ),
               child: ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                onTap: () => _openSecretFile(file),
                 leading: CircleAvatar(
                   backgroundColor: Colors.lightBlue.shade100,
                   child: Icon(Icons.insert_drive_file, color: Colors.blueAccent.shade200, size: 20),

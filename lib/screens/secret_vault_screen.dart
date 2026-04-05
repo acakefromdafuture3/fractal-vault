@@ -6,9 +6,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:local_auth/local_auth.dart'; 
 import 'package:file_picker/file_picker.dart'; 
-import 'package:open_filex/open_filex.dart'; // 🔥 ADDED: This is required to open files!
+import 'package:open_filex/open_filex.dart'; 
 
 import '../services/secret_vault_service.dart';
+import '../services/vault_service.dart'; // 🔥 ADDED: Hooking into Ritankar's Engine
 
 class SecretVaultScreen extends StatefulWidget {
   const SecretVaultScreen({Key? key}) : super(key: key);
@@ -135,22 +136,18 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
         String filePath = result.files.single.path!;
         String fileName = result.files.single.name;
         
-        String extension = fileName.split('.').last.toLowerCase();
-        String fileType = 'unknown';
-        if (['jpg', 'jpeg', 'png'].contains(extension)) fileType = 'image';
-        else if (['pdf', 'doc', 'docx'].contains(extension)) fileType = 'document';
-        else if (['txt', 'csv', 'md'].contains(extension)) fileType = 'text';
-        else if (['mp4', 'mkv', 'mov'].contains(extension)) fileType = 'video';
-        else if (['mp3', 'wav', 'm4a'].contains(extension)) fileType = 'audio';
+        // Grab extension and size safely
+        String extension = result.files.single.extension ?? fileName.split('.').last.toLowerCase();
+        int fileSize = result.files.single.size;
 
-        await FirebaseFirestore.instance.collection('vault_files').add({
-          'name': fileName,
-          'path': filePath, 
-          'type': fileType,
-          'status': 'Secured',
-          'isSecret': true, 
-          'dateAdded': FieldValue.serverTimestamp(),
-        });
+        // 🔌 THE FIX: Sending the file directly to Ritankar's Master Upload Portal!
+        await VaultService().uploadFile(
+          name: fileName,
+          path: filePath,
+          extension: extension,
+          size: fileSize,
+          isSecret: true, // 👈 Secret Vault
+        );
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -165,7 +162,6 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
     }
   }
 
-  // 🔥 NEW METHOD: Safely inside the class so it can be called by the list!
   Future<void> _openSecretFile(Map<String, dynamic> fileData) async {
     if (fileData['path'] != null) {
       try {

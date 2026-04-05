@@ -2,11 +2,11 @@
 
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart'; 
 import 'category_screen.dart'; 
 import 'home_screen.dart';
 import '../widgets/doodle_background.dart';
+import '../services/vault_service.dart'; // 🔥 ADDED: Hooking into Ritankar's Engine
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -21,10 +21,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _pickAndLogMetadata(ColorScheme colors) async {
     try {
-      // 🔥 THE FIX: Modern syntax, correctly formatted!
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['pdf', 'txt', 'jpg', 'png', 'doc', 'docx'], 
+        allowedExtensions: ['pdf', 'txt', 'jpg', 'png', 'doc', 'docx', 'mp4', 'mp3'], 
       );
 
       if (result == null) return; 
@@ -36,16 +35,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       String extension = result.files.single.extension ?? 'unknown';
       int fileSize = result.files.single.size;
 
-      await FirebaseFirestore.instance.collection('vault_files').add({
-        'name': fileName,
-        'type': _mapExtensionToCategory(extension),
-        'extension': extension,
-        'size': fileSize,
-        'path': filePath, 
-        'status': 'Secured',
-        'isSecret': false, 
-        'dateAdded': FieldValue.serverTimestamp(),
-      });
+      // 🔌 THE FIX: Sending the file directly to Ritankar's Master Upload Portal!
+      await VaultService().uploadFile(
+        name: fileName,
+        path: filePath,
+        extension: extension,
+        size: fileSize,
+        isSecret: false, // 👈 Public Vault (Main Screen)
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -57,15 +54,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } finally {
       setState(() => _isUploading = false);
     }
-  }
-
-  String _mapExtensionToCategory(String ext) {
-    if (['jpg', 'png', 'jpeg'].contains(ext.toLowerCase())) return 'image';
-    if (['pdf', 'doc', 'docx'].contains(ext.toLowerCase())) return 'document';
-    if (['txt','csv','md'].contains(ext.toLowerCase())) return 'text';
-    if (['mp3', 'wav'].contains(ext.toLowerCase())) return 'audio';
-    if (['mp4', 'mov'].contains(ext.toLowerCase())) return 'video';
-    return 'document';
   }
 
   @override
