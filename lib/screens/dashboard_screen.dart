@@ -63,7 +63,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           List<Uint8List> myShards = shredder.sliceFile(fileBytes);
           
           // Use a simple, short ID for Appwrite compatibility
-          String testFileId = "doc123"; 
+          String testFileId = "doc_${DateTime.now().millisecondsSinceEpoch}"; 
 
           // 🚀 1. FIRE SHARD 1 TO SUPABASE
           CloudDispatcher cloudDispatcher = CloudDispatcher();
