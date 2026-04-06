@@ -1,6 +1,7 @@
 // Location: lib/screens/dashboard_screen.dart
 
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart'; 
@@ -9,6 +10,10 @@ import 'home_screen.dart';
 import 'security_logs_screen.dart'; // 🔥 BRINGING THE 3RD TAB BACK!
 import '../widgets/doodle_background.dart';
 import '../services/vault_service.dart';
+import '../widgets/shredder_engine.dart';
+import '../services/cloud_dispatcher.dart';
+import '../services/local_node_manager.dart';
+import '../widgets/reconstruction_engine.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -47,6 +52,62 @@ class _DashboardScreenState extends State<DashboardScreen> {
         String extension = file.extension ?? fileName.split('.').last.toLowerCase();
         int fileSize = file.size;
 
+        // ==========================================
+        // 🧪 FRACTAL SHREDDER TEST ZONE (START)
+        // ==========================================
+        try {
+          File physicalFile = File(filePath);
+          Uint8List fileBytes = await physicalFile.readAsBytes();
+          
+          ShredderEngine shredder = ShredderEngine();
+          List<Uint8List> myShards = shredder.sliceFile(fileBytes);
+          
+          // Use a simple, short ID for Appwrite compatibility
+          String testFileId = "doc123"; 
+
+          // 🚀 1. FIRE SHARD 1 TO SUPABASE
+          CloudDispatcher cloudDispatcher = CloudDispatcher();
+          await cloudDispatcher.uploadToSupabase(
+            fileId: testFileId, 
+            shardBytes: myShards[0] 
+          );
+
+          // 🚀 2. FIRE SHARD 2 TO APPWRITE
+          await cloudDispatcher.uploadToAppwrite(
+            fileId: testFileId, 
+            shardBytes: myShards[1] 
+          );
+
+          // 💾 3. BURY SHARD 5 IN THE HARDWARE
+          LocalNodeManager localNode = LocalNodeManager();
+          await localNode.securePhysicalKey(
+            fileId: testFileId,
+            shardBytes: myShards[4] 
+          );
+          // ==========================================
+          // 🧬 PHASE 2: THE RECONSTRUCTION TEST
+          // ==========================================
+          print("⏳ Waiting 2 seconds before attempting reconstruction...");
+          await Future.delayed(const Duration(seconds: 2));
+
+          ReconstructionEngine reconstructor = ReconstructionEngine();
+          
+          // We are feeding it exactly 3 shards to prove the threshold works.
+          // Shard 0 (Supabase), Shard 1 (Appwrite), and Shard 4 (Local Hardware)
+          List<Uint8List> vaultShards = [
+            myShards[0], 
+            myShards[1], 
+            myShards[4]  
+          ];
+
+          reconstructor.rebuildFile(vaultShards);
+
+        } catch (e) {
+          print("❌ ERROR: $e");
+        }
+        // ==========================================
+        // 🧪 FRACTAL SHREDDER TEST ZONE (END)
+        // ==========================================
        await VaultService().uploadFile(
           name: fileName,
           path: filePath,

@@ -3,6 +3,7 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  shamir_secret_plg
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
