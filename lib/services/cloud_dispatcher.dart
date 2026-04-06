@@ -1,22 +1,20 @@
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class CloudDispatcher {
   
   // ==========================================
-  // 🛡️ NODE 1: SUPABASE CREDENTIALS
+  // 🛡️ PULLING SECRETS FROM .ENV (FORTRESS MODE)
   // ==========================================
-  final String _supabaseUrl = "https://uoxanidegimtnlmehjkn.supabase.co";
-  final String _supabaseSecretKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVveGFuaWRlZ2ltdG5sbWVoamtuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTM5NTQwOSwiZXhwIjoyMDkwOTcxNDA5fQ.c_hJ2P8sE19pxxqjvzsm-IJ-TbeZBdOs6iKC3hpKSxo"; // <-- Put your real key back here!
+  final String _supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+  final String _supabaseSecretKey = dotenv.env['SUPABASE_SERVICE_ROLE'] ?? '';
   final String _supabaseBucket = "shard-node-1"; 
 
-  // ==========================================
-  // 🛡️ NODE 2: APPWRITE CREDENTIALS
-  // ==========================================
-  final String _appwriteEndpoint = "https://sgp.cloud.appwrite.io/v1";
-  final String _appwriteProject = "69d27d40001e99cd0261";
-  final String _appwriteKey = "standard_1ba11f25aca41b8b0071444b0fd6451d3a0df292daddcec20a2b20f178915db4818f44d5a7a0e04fbfc475b25b463cd9e31b98e81b321fc7519a776a8ccc85ff53a180aeb36f2ccb5277f405bd4c60a173a4e91392dffbf0fe6a69d6d6f3d49de47ded5bf1c538a5a262bf75dfecf09bb7207767d54add8e308ed9e0eb0ab776";
-  final String _appwriteBucket = "69d27d7000227e7367d9"; 
+  final String _appwriteEndpoint = dotenv.env['APPWRITE_ENDPOINT'] ?? '';
+  final String _appwriteProject = dotenv.env['APPWRITE_PROJECT_ID'] ?? '';
+  final String _appwriteKey = dotenv.env['APPWRITE_API_KEY'] ?? '';
+  final String _appwriteBucket = dotenv.env['APPWRITE_BUCKET_ID'] ?? ''; 
 
 
   // =========================================================================
