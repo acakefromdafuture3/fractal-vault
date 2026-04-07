@@ -23,6 +23,7 @@ dependencies:
   shamir_secret_plg: ^0.6.0
   flutter_dotenv: ^6.0.0
   http: ^1.2.0 # Added this for your CloudDispatcher!
+  crypto: ^3.0.7
 
 dev_dependencies:
   flutter_test:

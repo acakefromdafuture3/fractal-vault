@@ -8,9 +8,8 @@ import 'package:file_picker/file_picker.dart';
 
 import 'home_screen.dart';
 import 'category_screen.dart'; 
-import 'security_logs_screen.dart'; 
-import 'system_protocols_screen.dart'; 
 import 'security_logs_screen.dart'; // 🔥 BRINGING THE 3RD TAB BACK!
+import 'system_protocols_screen.dart'; 
 import '../widgets/doodle_background.dart';
 import '../services/vault_service.dart';
 import '../widgets/shredder_engine.dart';
@@ -103,8 +102,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           // Use a simple, short ID for Appwrite compatibility
           String testFileId = "doc_${DateTime.now().millisecondsSinceEpoch}"; 
 
-          // 🚀 1. FIRE SHARD 1 TO SUPABASE
           CloudDispatcher cloudDispatcher = CloudDispatcher();
+          LocalNodeManager localNode = LocalNodeManager();
+
+          // 🚀 1. FIRE SHARD 1 TO SUPABASE
           await cloudDispatcher.uploadToSupabase(
             fileId: testFileId, 
             shardBytes: myShards[0] 
@@ -116,12 +117,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
             shardBytes: myShards[1] 
           );
 
-          // 💾 3. BURY SHARD 5 IN THE HARDWARE
-          LocalNodeManager localNode = LocalNodeManager();
+          // 🚀 3. FIRE SHARD 3 TO CLOUDINARY (SIGNED)
+          await cloudDispatcher.uploadToCloudinary(
+            fileId: testFileId, 
+            shardBytes: myShards[2] 
+          );
+
+          // 🚀 4. FIRE SHARD 4 TO IMAGEKIT
+          await cloudDispatcher.uploadToImageKit(
+            fileId: testFileId, 
+            shardBytes: myShards[3] 
+          );
+
+          // 💾 5. BURY SHARD 5 IN THE HARDWARE
           await localNode.securePhysicalKey(
             fileId: testFileId,
             shardBytes: myShards[4] 
           );
+
           // ==========================================
           // 🧬 PHASE 2: THE RECONSTRUCTION TEST
           // ==========================================
@@ -130,11 +143,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
           ReconstructionEngine reconstructor = ReconstructionEngine();
           
-          // We are feeding it exactly 3 shards to prove the threshold works.
-          // Shard 0 (Supabase), Shard 1 (Appwrite), and Shard 4 (Local Hardware)
+          // Feeding it exactly 3 shards to prove the threshold works.
+          // Shard 0 (Supabase), Shard 2 (Cloudinary), and Shard 4 (Local Hardware)
           List<Uint8List> vaultShards = [
             myShards[0], 
-            myShards[1], 
+            myShards[2], // Testing the new Cloudinary shard!
             myShards[4]  
           ];
 
@@ -146,13 +159,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         // ==========================================
         // 🧪 FRACTAL SHREDDER TEST ZONE (END)
         // ==========================================
+        
        await VaultService().uploadFile(
-          name: fileName,
-          path: filePath,
-          extension: extension,
-          size: fileSize,
-          isSecret: false, 
-        );
+         name: fileName,
+         path: filePath,
+         extension: extension,
+         size: fileSize,
+         isSecret: false, 
+       );
       }
 
       if (mounted) {
