@@ -26,7 +26,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
 
-    // FIX: Calling the correct Firebase method from your service
+    // Calling the correct Firebase method from your service
     var user = await _authService.loginWithEmail(
       _emailController.text.trim(),
       _passwordController.text.trim(),
@@ -37,7 +37,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (user != null) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const DashboardScreen()),
+        MaterialPageRoute(builder: (context) => DashboardScreen()), // 🔥 FIXED: No const here!
       );
     } else {
       _showError("Access Denied. Please verify credentials.");
@@ -52,10 +52,9 @@ class _LoginScreenState extends State<LoginScreen> {
     if (user != null) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const DashboardScreen()),
+        MaterialPageRoute(builder: (context) => DashboardScreen()), // 🔥 FIXED: Removed the hidden const here!
       );
     } else {
-      // 👇 NOW IT WILL ACTUALLY TELL YOU IT FAILED
       _showError("Google Auth Failed: Check Terminal or Firebase Setup.");
     }
   }

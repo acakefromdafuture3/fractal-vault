@@ -34,7 +34,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (user != null) {
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => const DashboardScreen()),
+        MaterialPageRoute(builder: (context) => DashboardScreen()), // 🔥 PERFECT: No const here!
         (route) => false,
       );
     } else {

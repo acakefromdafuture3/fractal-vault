@@ -4,8 +4,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart'; 
-import 'category_screen.dart'; 
+
 import 'home_screen.dart';
+import 'category_screen.dart'; 
+import 'security_logs_screen.dart'; 
+import 'system_protocols_screen.dart'; 
 import '../widgets/doodle_background.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -19,22 +22,57 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _currentNavIndex = 0; 
   bool _isUploading = false; 
 
-  Future<void> _pickAndLogMetadata(ColorScheme colors) async {
+  void _showUploadOptions(ColorScheme colors) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF0D2137),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10))),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(Icons.insert_drive_file, color: Color(0xFF90CAFF), size: 28),
+              title: const Text("Single File (Fast)", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+              subtitle: const Text("One-tap quick upload", style: TextStyle(color: Colors.white54, fontSize: 12)),
+              onTap: () {
+                Navigator.pop(context);
+                _pickAndLogMetadata(colors, isMultiple: false); 
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.library_add, color: Color(0xFF90CAFF), size: 28),
+              title: const Text("Multiple Files (Bulk)", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+              subtitle: const Text("Select multiple items at once", style: TextStyle(color: Colors.white54, fontSize: 12)),
+              onTap: () {
+                Navigator.pop(context);
+                _pickAndLogMetadata(colors, isMultiple: true); 
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAndLogMetadata(ColorScheme colors, {required bool isMultiple}) async {
     try {
-      // 🔥 THE UPGRADE: Added allowMultiple: true
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf', 'txt', 'jpg', 'png', 'doc', 'docx'], 
-        allowMultiple: true, 
+        allowMultiple: isMultiple, 
       );
 
       if (result == null || result.files.isEmpty) return; 
 
       setState(() => _isUploading = true);
 
-      // 🔥 THE UPGRADE: Loop through EVERY selected file!
       for (var file in result.files) {
-        if (file.path == null) continue; // Skip if something goes wrong with one file
+        if (file.path == null) continue; 
         
         String filePath = file.path!; 
         String fileName = file.name;
@@ -55,7 +93,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("${result.files.length} Files Sharded & Logged!"), 
+          content: Text("${result.files.length} File(s) Sharded & Logged!"), 
           backgroundColor: Colors.green
         ));
       }
@@ -82,15 +120,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final List<Widget> pages = [
       const HomeScreen(),
       const CategoryScreen(),
-      _buildPlaceholderScreen("Security Firewall", Icons.security_rounded, colors, "security"), 
-      _buildPlaceholderScreen("System Protocols", Icons.admin_panel_settings_outlined, colors, "settings"),
+      const SecurityLogsScreen(), // 🔥 Tab 3 is active!
+      const SystemProtocolsScreen(), // 🔥 Tab 4 is active!
     ];
 
     return Scaffold(
       extendBody: true, 
       body: pages[_currentNavIndex],
       floatingActionButton: FloatingActionButton(
-        onPressed: _isUploading ? null : () => _pickAndLogMetadata(colors), 
+        onPressed: _isUploading ? null : () => _showUploadOptions(colors),
         backgroundColor: _isUploading ? Colors.grey : const Color(0xFF90CAFF), 
         child: _isUploading 
             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Color(0xFF0D2137), strokeWidth: 2)) 
@@ -123,52 +161,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return IconButton(
       icon: Icon(icon, color: isSelected ? const Color(0xFF90CAFF) : Colors.white.withOpacity(0.4), size: 28),
       onPressed: () => setState(() => _currentNavIndex = index),
-    );
-  }
-
-  Widget _buildPlaceholderScreen(String title, IconData icon, ColorScheme colors, String type) {
-    List<IconData> getDoodles() {
-      if (title == "System Protocols") {
-        return [Icons.settings, Icons.build, Icons.memory, Icons.tune, Icons.admin_panel_settings, Icons.developer_board];
-      } else if (title == "Security Firewall") {
-        return [Icons.security, Icons.lock, Icons.shield, Icons.vpn_key, Icons.verified_user];
-      }
-      return [Icons.code, Icons.data_object, Icons.terminal, Icons.bug_report];
-    }
-
-    return Stack(
-      children: [
-        Container(
-          height: double.infinity, width: double.infinity,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter, end: Alignment.bottomCenter,
-              colors: [colors.primary, Colors.white], stops: const [0.2, 0.8], 
-            ),
-          ),
-        ),
-        
-        CodeDoodleBackground(icons: getDoodles()), 
-        
-        Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 80, color: const Color(0xFF90CAFF)),
-              const SizedBox(height: 20),
-              Text(
-                title, 
-                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 1.5)
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                "MODULE CURRENTLY OFFLINE", 
-                style: TextStyle(color: Colors.white54, fontFamily: 'Courier', letterSpacing: 2)
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }
