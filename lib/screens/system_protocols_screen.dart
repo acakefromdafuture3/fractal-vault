@@ -5,7 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../widgets/doodle_background.dart';
-import 'login_screen.dart'; // 🔥 THE FIX: We need to import the Login Screen so we can go there!
+import 'login_screen.dart';
+import 'operator_profile_screen.dart'; // 🔥 ADD THIS IMPORT
 
 class SystemProtocolsScreen extends StatefulWidget {
   const SystemProtocolsScreen({super.key});
@@ -137,21 +138,75 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
     }
   }
 
-  // 🔥 THE FIX: We actually navigate to the Login Screen now!
   Future<void> _terminateSession() async {
     if (_isProcessing) return;
-    setState(() => _isProcessing = true); // 🛡️ Shield goes up
+    setState(() => _isProcessing = true); 
     
-    await FirebaseAuth.instance.signOut(); // Kills the Firebase session
+    await FirebaseAuth.instance.signOut(); 
     
     if (mounted) {
-      // Sends you to the Login Screen and destroys the "Back" button history!
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (context) => const LoginScreen()),
         (route) => false,
       );
     }
+  }
+
+  // 🔥 THE COOLER POP-UP: Using showGeneralDialog for custom animations!
+  void _showOperatorProfile() {
+    if (_isProcessing) return;
+    
+    // 🔥 THE BUTTER-SMOOTH CINEMATIC FLASH
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 500), // Sped up so it doesn't drag
+        reverseTransitionDuration: const Duration(milliseconds: 350), // Quicker exit
+        pageBuilder: (context, animation, secondaryAnimation) => const OperatorProfileScreen(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          
+          // 🔥 The "Butter Smooth" Curve: Starts incredibly fast, then glides to a stop
+          final scaleCurve = CurvedAnimation(
+            parent: animation, 
+            curve: Curves.fastLinearToSlowEaseIn, 
+            reverseCurve: Curves.easeOut, // Keeps the exit snappy
+          );
+
+          // 🔥 The Fade Curve: Fades in smoothly and independently
+          final fadeCurve = CurvedAnimation(
+            parent: animation, 
+            curve: Curves.easeIn,
+          );
+
+          return FadeTransition(
+            opacity: fadeCurve,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.85, end: 1.0).animate(scaleCurve), // Deeper zoom-in
+              child: child,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // 🔥 THE SELECTABLE TEXT FIX: Now you can highlight and copy!
+  Widget _buildDossierRow(String label, String value, {bool isGreen = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 10, fontFamily: 'Courier', letterSpacing: 1.0)),
+          SelectableText( // Changed from Text to SelectableText!
+            value, 
+            style: TextStyle(color: isGreen ? Colors.greenAccent : Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+            cursorColor: const Color(0xFF90CAFF), // Makes the little text cursor match our blue theme
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -198,39 +253,44 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
                   child: ListView(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0D2137),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFF90CAFF).withOpacity(0.3)),
-                        ),
-                        child: Row(
-                          children: [
-                            CircleAvatar(
-                              radius: 30,
-                              backgroundColor: const Color(0xFF90CAFF).withOpacity(0.2),
-                              child: const Icon(Icons.person, size: 35, color: Color(0xFF90CAFF)),
-                            ),
-                            const SizedBox(width: 20),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text("OPERATOR ID:", style: TextStyle(color: Colors.white54, fontSize: 10, fontFamily: 'Courier', letterSpacing: 1.5)),
-                                  Text(user?.email ?? "Offline.Agent@vault.com", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16), overflow: TextOverflow.ellipsis),
-                                  const SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle)),
-                                      const SizedBox(width: 6),
-                                      const Text("Clearance: MAXIMUM", style: TextStyle(color: Colors.greenAccent, fontSize: 12, fontFamily: 'Courier', fontWeight: FontWeight.bold)),
-                                    ],
-                                  ),
-                                ],
+                      InkWell(
+                        onTap: _showOperatorProfile,
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0D2137),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFF90CAFF).withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 30,
+                                backgroundColor: const Color(0xFF90CAFF).withOpacity(0.2),
+                                child: const Icon(Icons.person, size: 35, color: Color(0xFF90CAFF)),
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 20),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text("OPERATOR ID:", style: TextStyle(color: Colors.white54, fontSize: 10, fontFamily: 'Courier', letterSpacing: 1.5)),
+                                    Text(user?.email ?? "Offline.Agent@vault.com", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16), overflow: TextOverflow.ellipsis),
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle)),
+                                        const SizedBox(width: 6),
+                                        const Text("Clearance: MAXIMUM", style: TextStyle(color: Colors.greenAccent, fontSize: 12, fontFamily: 'Courier', fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(Icons.chevron_right, color: Colors.white54),
+                            ],
+                          ),
                         ),
                       ),
                       
