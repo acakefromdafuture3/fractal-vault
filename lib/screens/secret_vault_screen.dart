@@ -89,7 +89,7 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
     await Future.delayed(const Duration(seconds: 1)); 
 
     final prefs = await SharedPreferences.getInstance();
-    final correctPin = prefs.getString('vaultPin') ?? '1234';
+    final correctPin = prefs.getString('secret_vault_pin') ?? '1234';
 
     if (_enteredPin == correctPin) { 
       setState(() {
