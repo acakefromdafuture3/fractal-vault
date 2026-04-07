@@ -270,23 +270,17 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
         String filePath = result.files.single.path!;
         String originalName = result.files.single.name;
         String extension = result.files.single.extension ?? originalName.split('.').last.toLowerCase();
-        
-        String fileType = 'unknown';
-        if (['jpg', 'jpeg', 'png'].contains(extension)) fileType = 'image';
-        else if (['pdf', 'doc', 'docx'].contains(extension)) fileType = 'document';
-        else if (['txt', 'csv', 'md'].contains(extension)) fileType = 'text';
-        else if (['mp4', 'mkv', 'mov'].contains(extension)) fileType = 'video';
-        else if (['mp3', 'wav', 'm4a'].contains(extension)) fileType = 'audio';
+        int fileSize = result.files.single.size; 
 
-        await FirebaseFirestore.instance.collection('vault_files').add({
-          'name': originalName,
-          'path': filePath,
-          'type': fileType,
-          'status': 'Secured',
-          'isSecret': true,
-          'folderId': _activeFolderId == 'unsorted' ? null : _activeFolderId,
-          'dateAdded': FieldValue.serverTimestamp(),
-        });
+        // 🔥 RITANKAR'S MASTER PORTAL
+        await VaultService().uploadFile(
+          name: originalName,
+          path: filePath,
+          extension: extension,
+          size: fileSize,
+          isSecret: true,
+          folderId: _activeFolderId == 'unsorted' ? null : _activeFolderId,
+        );
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(

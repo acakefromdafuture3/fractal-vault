@@ -10,6 +10,7 @@ class VaultService {
     required String extension,
     required int size,
     required bool isSecret,
+    String? folderId, // 🔥 ADDED: Optional parameter for Tista's new Folder feature!
   }) async {
     
     // 1. You handle the translation automatically!
@@ -24,6 +25,7 @@ class VaultService {
       'size': size,
       'status': 'Secured',
       'isSecret': isSecret, 
+      'folderId': folderId, // 🔥 ADDED: Saves it safely to the database
       'dateAdded': FieldValue.serverTimestamp(),
     });
   }
@@ -77,7 +79,7 @@ class VaultService {
 
     if (['jpg', 'jpeg', 'png'].contains(lowerType)) return 'image';
     if (['pdf', 'doc', 'docx'].contains(lowerType)) return 'document'; 
-    if (['txt', 'csv', 'md'].contains(lowerType)) return 'text';      
+    if (['txt', 'csv', 'md'].contains(lowerType)) return 'text';       
     if (['mp4', 'mkv', 'mov'].contains(lowerType)) return 'video';
     if (['mp3', 'wav', 'm4a'].contains(lowerType)) return 'audio';
     

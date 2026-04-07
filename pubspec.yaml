@@ -20,7 +20,10 @@ dependencies:
   open_filex: ^4.7.0
   shared_preferences: ^2.5.5
   local_auth: ^2.1.2
-  
+  shamir_secret_plg: ^0.6.0
+  flutter_dotenv: ^6.0.0
+  http: ^1.2.0 # Added this for your CloudDispatcher!
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -28,3 +31,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # 🛡️ THE VAULT IS OFFICIALLY REGISTERED HERE:
+  assets:
+    - .env
