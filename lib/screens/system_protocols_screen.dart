@@ -12,6 +12,7 @@ import '../widgets/doodle_background.dart';
 import 'login_screen.dart';
 import 'operator_profile_screen.dart'; 
 import 'otp_verification_screen.dart';
+import '../services/email_service.dart';
 
 class SystemProtocolsScreen extends StatefulWidget {
   const SystemProtocolsScreen({super.key});
@@ -129,57 +130,31 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
       )
     );
 
+    // 🔥 This is where the magic happens. Look how clean this is now!
     if (confirm == true) {
       setState(() => _isProcessing = true);
       if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
       
       try {
-        // 1. Fetch credentials securely from .env
-        final serviceId = dotenv.env['EMAILJS_SERVICE_ID'] ?? '';
-        final templateId = dotenv.env['EMAILJS_TEMPLATE_ID'] ?? '';
-        final publicKey = dotenv.env['EMAILJS_PUBLIC_KEY'] ?? '';
+        // We just ask the Service engine to do all the heavy lifting
+        final otpCode = await EmailService().dispatchPinResetOtp(email);
 
-        // 🔥 Generate a random 6-digit Secure Code
-        final String otpCode = (Random().nextInt(900000) + 100000).toString();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text("✅ Code Dispatched: Check your inbox"), 
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ));
 
-        // 2. Fire the API Payload
-        final url = Uri.parse('https://api.emailjs.com/api/v1.0/email/send');
-        final response = await http.post(
-          url,
-          headers: {'Content-Type': 'application/json'},
-          body: json.encode({
-            'service_id': serviceId,
-            'template_id': templateId,
-            'user_id': publicKey,
-            'template_params': {
-              'email': email, 
-              'otp': otpCode, // 🔥 Injecting the 6-digit code here
-            }
-          }),
-        );
-
-        // 3. Handle Success
-        if (response.statusCode == 200) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text("✅ Code Dispatched: Check your inbox"), 
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ));
-
-            // 🔥 Push to the OTP Verification Screen, passing the code along!
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => OtpVerificationScreen(validOtp: otpCode),
-              ),
-            );
-          }
-        } else {
-          throw Exception("Failed to send: ${response.body}");
+          // Move to the OTP Verification Screen
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => OtpVerificationScreen(validOtp: otpCode),
+            ),
+          );
         }
       } catch (e) {
-        // 4. Handle Network Errors
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text("❌ Network Error: $e"), 
