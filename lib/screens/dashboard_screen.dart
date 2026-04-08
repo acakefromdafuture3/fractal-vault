@@ -2,6 +2,7 @@
 
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:math' as math; 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart'; 
@@ -81,6 +82,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       setState(() => _isUploading = true);
 
+      // 🔥 Triggers the Shard Explosion animation
+      showDialog(
+        context: context,
+        barrierDismissible: false, 
+        builder: (context) => const ShardingAnimationDialog(),
+      );
+
       for (var file in result.files) {
         if (file.path == null) continue; 
         
@@ -89,9 +97,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         String extension = file.extension ?? fileName.split('.').last.toLowerCase();
         int fileSize = file.size;
 
-        // ==========================================
-        // 🧪 FRACTAL SHREDDER TEST ZONE (START)
-        // ==========================================
         try {
           File physicalFile = File(filePath);
           Uint8List fileBytes = await physicalFile.readAsBytes();
@@ -120,9 +125,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         } catch (e) {
           print("❌ ERROR: $e");
         }
-        // ==========================================
-        // 🧪 FRACTAL SHREDDER TEST ZONE (END)
-        // ==========================================
         
        await VaultService().uploadFile(
          name: fileName,
@@ -134,15 +136,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
 
       if (mounted) {
+        Navigator.pop(context); // Close dialog
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text("${result.files.length} File(s) Sharded & Logged!"), 
           backgroundColor: Colors.green
         ));
       }
     } catch (e) {
+      if (mounted) Navigator.pop(context); 
       debugPrint("Error: $e");
     } finally {
-      setState(() => _isUploading = false);
+      if (mounted) setState(() => _isUploading = false);
     }
   }
 
@@ -168,24 +172,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return Scaffold(
       extendBody: true, 
-      backgroundColor: Colors.transparent, // 🔥 Stops the default Scaffold white background from bleeding
+      backgroundColor: Colors.transparent, 
       body: pages[_currentNavIndex],
       
       floatingActionButton: FloatingActionButton(
         onPressed: _isUploading ? null : () => _showUploadOptions(colors),
-        shape: const CircleBorder(), // 🔥 THE FIX: Forces the button to be a perfect circle!
+        shape: const CircleBorder(), 
         elevation: 2,
         backgroundColor: _isUploading ? Colors.grey : const Color(0xFF90CAFF), 
         child: _isUploading 
             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Color(0xFF0D2137), strokeWidth: 2)) 
-            : const Icon(Icons.add, size: 32, color: Color(0xFF0D2137)), // Made icon dark so it pops!
+            : const Icon(Icons.add, size: 32, color: Color(0xFF0D2137)), 
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       
       bottomNavigationBar: BottomAppBar(
         color: const Color(0xFF0D2137), 
-        surfaceTintColor: Colors.transparent, // 🔥 Kills the ugly Material 3 white tint overlay
-        clipBehavior: Clip.antiAlias,         // 🔥 Smooths the jagged edges of the cutout hole
+        surfaceTintColor: Colors.transparent, 
+        clipBehavior: Clip.antiAlias,         
         shape: const CircularNotchedRectangle(), 
         notchMargin: 8,
         child: SizedBox(
@@ -195,7 +199,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               _buildNavIcon(0, Icons.grid_view_rounded, "CORE"),
               _buildNavIcon(1, Icons.folder_special, "VAULT"),
-              const SizedBox(width: 40), // Leaves space for the floating button
+              const SizedBox(width: 40), 
               _buildNavIcon(2, Icons.shield_outlined, "RADAR"),
               _buildNavIcon(3, Icons.settings_outlined, "SYSTEM"),
             ],
@@ -222,13 +226,138 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(height: 4),
             Text(
               label, 
-              style: TextStyle(
-                color: color, 
-                fontSize: 10, 
-                fontWeight: FontWeight.bold, 
-                letterSpacing: 1.0, 
-              )
+              style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.0)
             ),
+          ],
+        ),
+      ),
+    );
+  }
+} // 🔥 Notice how the DashboardScreen state safely ends here!
+
+// =====================================================================
+// 🔥 THE PURE SHARDING ANIMATION (CINEMATIC SLOW-MOTION)
+// =====================================================================
+
+class ShardingAnimationDialog extends StatefulWidget {
+  const ShardingAnimationDialog({super.key});
+
+  @override
+  State<ShardingAnimationDialog> createState() => _ShardingAnimationDialogState();
+}
+
+class _ShardingAnimationDialogState extends State<ShardingAnimationDialog> with SingleTickerProviderStateMixin {
+  late AnimationController _shardController;
+  late Animation<double> _explodeProgress;
+  String _statusText = "INITIALIZING SHREDDER...";
+  
+  final List<String> _steps = [
+    "ANALYZING FILE...",
+    "SHATTERING INTO 5 PIECES...",
+    "ENCRYPTING PAYLOADS...",
+    "DISPATCHING SHARDS..."
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _shardController = AnimationController(vsync: this, duration: const Duration(milliseconds: 3500))..repeat();
+    _explodeProgress = CurvedAnimation(parent: _shardController, curve: Curves.easeOutCubic);
+    
+    _cycleText();
+  }
+
+  void _cycleText() async {
+    int index = 0;
+    while (mounted) {
+      setState(() => _statusText = _steps[index]);
+      index = (index + 1) % _steps.length; 
+      await Future.delayed(const Duration(milliseconds: 1500));
+    }
+  }
+
+  @override
+  void dispose() {
+    _shardController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent, 
+      elevation: 0,
+      child: Container(
+        padding: const EdgeInsets.all(30),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0A1526).withOpacity(0.95), 
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFF90CAFF), width: 1.5),
+          boxShadow: [BoxShadow(color: const Color(0xFF90CAFF).withOpacity(0.4), blurRadius: 30, spreadRadius: 5)],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            
+            // 🔥 THE EXPLODING FILE ANIMATION
+            SizedBox(
+              height: 100,
+              width: 100,
+              child: AnimatedBuilder(
+                animation: _shardController,
+                builder: (context, child) {
+                  final double progress = _explodeProgress.value;
+                  
+                  // The solid file vanishes smoothly
+                  final double fileOpacity = 1.0 - (progress * 3).clamp(0.0, 1.0); 
+                  
+                  // The shards fade in fast, then fade out slowly as they fly away
+                  final double shardOpacity = progress < 0.1 ? (progress * 10) : (1.0 - progress);
+                  
+                  // The shards travel exactly 45 pixels outward
+                  final double distance = progress * 45.0; 
+
+                  return Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // 1. The 5 Flying Shards!
+                      ...List.generate(5, (index) {
+                        final double angle = (index * (360 / 5)) * (math.pi / 180);
+                        final double dx = math.cos(angle) * distance;
+                        final double dy = math.sin(angle) * distance;
+
+                        return Transform.translate(
+                          offset: Offset(dx, dy),
+                          child: Opacity(
+                            opacity: shardOpacity,
+                            child: Transform.rotate(
+                              angle: progress * math.pi * 3, // Smooth, slow spinning
+                              child: const Icon(Icons.change_history, color: Color(0xFF90CAFF), size: 24), 
+                            ),
+                          ),
+                        );
+                      }),
+                      
+                      // 2. The Main File (shrinks and fades)
+                      Transform.scale(
+                        scale: 1.0 - (progress * 0.4), 
+                        child: Opacity(
+                          opacity: fileOpacity,
+                          child: const Icon(Icons.insert_drive_file, color: Colors.white, size: 50),
+                        ),
+                      ),
+                    ],
+                  );
+                }
+              ),
+            ),
+            
+            const SizedBox(height: 15),
+            const Text("FRACTAL SHARDING", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 2.0, fontSize: 16)),
+            const SizedBox(height: 15),
+            Text(_statusText, style: const TextStyle(color: Colors.greenAccent, fontFamily: 'Courier', fontSize: 12, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+            const SizedBox(height: 25),
+            ClipRRect(borderRadius: BorderRadius.circular(10), child: const LinearProgressIndicator(backgroundColor: Colors.white10, color: Color(0xFF90CAFF), minHeight: 4)),
           ],
         ),
       ),
