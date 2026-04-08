@@ -1,12 +1,18 @@
 // Location: lib/screens/system_protocols_screen.dart
 
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart'; // 🔥 ADDED FOR .ENV
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../widgets/doodle_background.dart';
 import 'login_screen.dart';
-import 'operator_profile_screen.dart'; // 🔥 ADD THIS IMPORT
+import 'operator_profile_screen.dart'; 
+import 'otp_verification_screen.dart';
+import '../services/email_service.dart';
 
 class SystemProtocolsScreen extends StatefulWidget {
   const SystemProtocolsScreen({super.key});
@@ -95,8 +101,11 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
     if (mounted) setState(() => _isProcessing = false);
   }
 
+  // 🔥 WIRED THE EMAILJS API WITH .ENV
   Future<void> _resetSecretVaultPin() async {
     if (_isProcessing) return;
+    
+    final email = user?.email ?? "operator@fractalvault.com";
 
     bool? confirm = await showDialog<bool>(
       context: context,
@@ -104,7 +113,7 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
         backgroundColor: const Color(0xFF0D2137),
         title: const Text("RESET SECRET PIN?", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
         content: Text(
-          "To reset your Secret Vault PIN, a secure verification link will be sent to your registered channel:\n\n${user?.email ?? 'Unknown Agent'}\n\nProceed with transmission?", 
+          "To reset your Secret Vault PIN, a secure 6-digit code will be sent to your registered channel:\n\n$email\n\nProceed with transmission?", 
           style: const TextStyle(color: Colors.white70)
         ),
         actions: [
@@ -115,26 +124,47 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text("SEND LINK", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+            child: const Text("SEND CODE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
           ),
         ],
       )
     );
 
+    // 🔥 This is where the magic happens. Look how clean this is now!
     if (confirm == true) {
       setState(() => _isProcessing = true);
-      
       if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text("Secure link dispatched. Awaiting verification..."), 
-          backgroundColor: Colors.blueAccent,
-          duration: Duration(seconds: 3),
-        ));
-      }
+      
+      try {
+        // We just ask the Service engine to do all the heavy lifting
+        final otpCode = await EmailService().dispatchPinResetOtp(email);
 
-      await Future.delayed(const Duration(seconds: 1)); 
-      if (mounted) setState(() => _isProcessing = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text("✅ Code Dispatched: Check your inbox"), 
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ));
+
+          // Move to the OTP Verification Screen
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => OtpVerificationScreen(validOtp: otpCode),
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text("❌ Network Error: $e"), 
+            backgroundColor: Colors.redAccent,
+            duration: const Duration(seconds: 3),
+          ));
+        }
+      } finally {
+        if (mounted) setState(() => _isProcessing = false);
+      }
     }
   }
 
@@ -157,23 +187,20 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
   void _showOperatorProfile() {
     if (_isProcessing) return;
     
-    // 🔥 THE BUTTER-SMOOTH CINEMATIC FLASH
     Navigator.push(
       context,
       PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 500), // Sped up so it doesn't drag
-        reverseTransitionDuration: const Duration(milliseconds: 350), // Quicker exit
+        transitionDuration: const Duration(milliseconds: 500), 
+        reverseTransitionDuration: const Duration(milliseconds: 350), 
         pageBuilder: (context, animation, secondaryAnimation) => const OperatorProfileScreen(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           
-          // 🔥 The "Butter Smooth" Curve: Starts incredibly fast, then glides to a stop
           final scaleCurve = CurvedAnimation(
             parent: animation, 
             curve: Curves.fastLinearToSlowEaseIn, 
-            reverseCurve: Curves.easeOut, // Keeps the exit snappy
+            reverseCurve: Curves.easeOut, 
           );
 
-          // 🔥 The Fade Curve: Fades in smoothly and independently
           final fadeCurve = CurvedAnimation(
             parent: animation, 
             curve: Curves.easeIn,
@@ -182,7 +209,7 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
           return FadeTransition(
             opacity: fadeCurve,
             child: ScaleTransition(
-              scale: Tween<double>(begin: 0.85, end: 1.0).animate(scaleCurve), // Deeper zoom-in
+              scale: Tween<double>(begin: 0.85, end: 1.0).animate(scaleCurve), 
               child: child,
             ),
           );
@@ -191,7 +218,6 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
     );
   }
 
-  // 🔥 THE SELECTABLE TEXT FIX: Now you can highlight and copy!
   Widget _buildDossierRow(String label, String value, {bool isGreen = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6.0),
@@ -199,10 +225,10 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label, style: const TextStyle(color: Colors.white54, fontSize: 10, fontFamily: 'Courier', letterSpacing: 1.0)),
-          SelectableText( // Changed from Text to SelectableText!
+          SelectableText( 
             value, 
             style: TextStyle(color: isGreen ? Colors.greenAccent : Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-            cursorColor: const Color(0xFF90CAFF), // Makes the little text cursor match our blue theme
+            cursorColor: const Color(0xFF90CAFF), 
           ),
         ],
       ),
