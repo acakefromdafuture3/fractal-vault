@@ -5,17 +5,19 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart'; 
+import 'package:path_provider/path_provider.dart'; // 🔥 Needed for temporary decryption
+import 'package:open_filex/open_filex.dart';       // 🔥 Needed to open the decrypted file
 
 import 'home_screen.dart';
 import 'category_screen.dart'; 
 import 'security_logs_screen.dart'; 
 import 'system_protocols_screen.dart'; 
 import '../widgets/doodle_background.dart';
+
 import '../services/vault_service.dart';
-import '../widgets/shredder_engine.dart';
-import '../services/cloud_dispatcher.dart';
-import '../services/local_node_manager.dart';
-import '../widgets/reconstruction_engine.dart';
+import '../services/vault_dispatcher.dart';
+import '../services/encryption_service.dart';
+import '../services/cloud_dispatcher.dart'; // 🔥 Needed to download the heavy file
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -27,6 +29,50 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   int _currentNavIndex = 0; 
   bool _isUploading = false; 
+
+  // 🔥 THE RECONSTRUCTION ENGINE
+  // (Note: If your "Recent Activity" list is actually built inside category_screen.dart, 
+  // you will need to copy this exact method into that file so the list tiles can call it!)
+  Future<void> _viewSecureFile(Map<String, dynamic> fileData) async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Fetching shards and decrypting..."), duration: Duration(seconds: 2))
+    );
+
+    try {
+      final String fileId = fileData['docId'];
+      final List<String> shards = List<String>.from(fileData['shards']);
+      final String ivBase64 = fileData['iv'];
+      final String extension = fileData['extension'];
+
+      // 1. Download encrypted bytes from Node 1 (Supabase)
+      final cloud = CloudDispatcher();
+      Uint8List? encryptedBytes = await cloud.downloadFromSupabase(fileId);
+
+      if (encryptedBytes == null) throw Exception("Node 1 unreachable.");
+
+      // 2. Rebuild Key & Decrypt
+      final crypto = EncryptionService();
+      String recoveredKey = crypto.rebuildAesKey(shards);
+      Uint8List plainBytes = crypto.decryptHeavyFile(encryptedBytes, recoveredKey, ivBase64);
+
+      // 3. Save to Temp Cache
+      final tempDir = await getTemporaryDirectory();
+      final tempFile = File('${tempDir.path}/view_$fileId.$extension');
+      await tempFile.writeAsBytes(plainBytes);
+
+      // 4. Open it natively!
+      await OpenFilex.open(tempFile.path);
+
+    } catch (e) {
+      debugPrint("View Error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Error: $e"),
+          backgroundColor: Colors.redAccent,
+        ));
+      }
+    }
+  }
 
   void _showUploadOptions(ColorScheme colors) {
     showModalBottomSheet(
@@ -40,15 +86,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(height: 10),
             Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10))),
             const SizedBox(height: 20),
+            
+            // 🛡️ SECURE SINGLE UPLOAD
             ListTile(
-              leading: const Icon(Icons.insert_drive_file, color: Color(0xFF90CAFF), size: 28),
-              title: const Text("Single File (Fast)", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-              subtitle: const Text("One-tap quick upload", style: TextStyle(color: Colors.white54, fontSize: 12)),
-              onTap: () {
-                Navigator.pop(context);
-                _pickAndLogMetadata(colors, isMultiple: false); 
+              // 🔥 CHANGED: Swapped Icons.security for Icons.upload_file
+              leading: const Icon(Icons.upload_file, color: Colors.greenAccent, size: 28), 
+              title: const Text("Secure Single File", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+              subtitle: const Text("Encrypt & shatter across 5 nodes", style: TextStyle(color: Colors.white54, fontSize: 12)),
+              onTap: () async {
+                Navigator.pop(context); 
+                setState(() => _isUploading = true); 
+                
+                // Triggers the Centralized Vault Dispatcher
+                await VaultDispatcher.initiateSecureUpload(context); 
+                
+                if (mounted) setState(() => _isUploading = false);
               },
             ),
+
+            // 📦 MULTIPLE FILES (BULK UPLOAD)
             ListTile(
               leading: const Icon(Icons.library_add, color: Color(0xFF90CAFF), size: 28),
               title: const Text("Multiple Files (Bulk)", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
@@ -70,11 +126,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: [
-        'pdf', 'txt', 'jpg', 'png', 'doc', 'docx', 
-        'mp4', 'mov', 'mkv', 'avi',                
-        'mp3', 'wav', 'm4a', 'aac'                 
-      ],
-      allowMultiple: isMultiple,
+          'pdf', 'txt', 'jpg', 'png', 'doc', 'docx', 
+          'mp4', 'mov', 'mkv', 'avi',                
+          'mp3', 'wav', 'm4a', 'aac'                 
+        ],
+        allowMultiple: isMultiple,
       );
 
       if (result == null || result.files.isEmpty) return; 
@@ -87,72 +143,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
         String filePath = file.path!; 
         String fileName = file.name;
         String extension = file.extension ?? fileName.split('.').last.toLowerCase();
-        int fileSize = file.size;
 
-        // ==========================================
-        // 🧪 FRACTAL SHREDDER TEST ZONE (START)
-        // ==========================================
-        try {
-          File physicalFile = File(filePath);
-          Uint8List fileBytes = await physicalFile.readAsBytes();
-          
-          ShredderEngine shredder = ShredderEngine();
-          List<Uint8List> myShards = shredder.sliceFile(fileBytes);
-          
-          String testFileId = "doc_${DateTime.now().millisecondsSinceEpoch}"; 
+        // 1. Read the massive file into memory
+        final fileBytes = await File(filePath).readAsBytes();
 
-          CloudDispatcher cloudDispatcher = CloudDispatcher();
-          LocalNodeManager localNode = LocalNodeManager();
+        // 2. Execute Cryptographic Pipeline
+        final engine = EncryptionService();
+        final aesKey = engine.generateMasterAesKey();
+        final encryptedData = engine.encryptHeavyFile(fileBytes, aesKey);
+        final keyShards = engine.shredAesKey(aesKey);
 
-          await cloudDispatcher.uploadToSupabase(fileId: testFileId, shardBytes: myShards[0]);
-          await cloudDispatcher.uploadToAppwrite(fileId: testFileId, shardBytes: myShards[1]);
-          await cloudDispatcher.uploadToCloudinary(fileId: testFileId, shardBytes: myShards[2]);
-          await cloudDispatcher.uploadToImageKit(fileId: testFileId, shardBytes: myShards[3]);
-          await localNode.securePhysicalKey(fileId: testFileId, shardBytes: myShards[4]);
-
-          print("⏳ Waiting 2 seconds before attempting reconstruction...");
-          await Future.delayed(const Duration(seconds: 2));
-
-          ReconstructionEngine reconstructor = ReconstructionEngine();
-          List<Uint8List> vaultShards = [myShards[0], myShards[2], myShards[4]];
-          reconstructor.rebuildFile(vaultShards);
-
-        } catch (e) {
-          print("❌ ERROR: $e");
-        }
-        // ==========================================
-        // 🧪 FRACTAL SHREDDER TEST ZONE (END)
-        // ==========================================
-        
-       await VaultService().uploadFile(
-         name: fileName,
-         path: filePath,
-         extension: extension,
-         size: fileSize,
-         isSecret: false, 
-       );
+        // 3. Send to the VaultService (which automatically triggers your 5 nodes)
+        await VaultService().uploadEncryptedFile(
+          name: fileName,
+          extension: extension,
+          encryptedBytes: encryptedData['encryptedBytes'],
+          iv: encryptedData['iv'],
+          shards: keyShards,
+        );
       }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("${result.files.length} File(s) Sharded & Logged!"), 
+          content: Text("${result.files.length} File(s) Secured & Shattered!"), 
           backgroundColor: Colors.green
         ));
       }
     } catch (e) {
       debugPrint("Error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Encryption Error: $e"), 
+          backgroundColor: Colors.redAccent
+        ));
+      }
     } finally {
       setState(() => _isUploading = false);
     }
-  }
-
-  String _mapExtensionToCategory(String ext) {
-    if (['jpg', 'png', 'jpeg'].contains(ext.toLowerCase())) return 'image';
-    if (['pdf', 'doc', 'docx'].contains(ext.toLowerCase())) return 'document';
-    if (['txt','csv','md'].contains(ext.toLowerCase())) return 'text';
-    if (['mp3', 'wav'].contains(ext.toLowerCase())) return 'audio';
-    if (['mp4', 'mov'].contains(ext.toLowerCase())) return 'video';
-    return 'document';
   }
 
   @override
@@ -168,24 +195,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return Scaffold(
       extendBody: true, 
-      backgroundColor: Colors.transparent, // 🔥 Stops the default Scaffold white background from bleeding
+      backgroundColor: Colors.transparent, 
       body: pages[_currentNavIndex],
       
       floatingActionButton: FloatingActionButton(
         onPressed: _isUploading ? null : () => _showUploadOptions(colors),
-        shape: const CircleBorder(), // 🔥 THE FIX: Forces the button to be a perfect circle!
+        shape: const CircleBorder(), 
         elevation: 2,
         backgroundColor: _isUploading ? Colors.grey : const Color(0xFF90CAFF), 
         child: _isUploading 
             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Color(0xFF0D2137), strokeWidth: 2)) 
-            : const Icon(Icons.add, size: 32, color: Color(0xFF0D2137)), // Made icon dark so it pops!
+            : const Icon(Icons.add, size: 32, color: Color(0xFF0D2137)), 
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       
       bottomNavigationBar: BottomAppBar(
         color: const Color(0xFF0D2137), 
-        surfaceTintColor: Colors.transparent, // 🔥 Kills the ugly Material 3 white tint overlay
-        clipBehavior: Clip.antiAlias,         // 🔥 Smooths the jagged edges of the cutout hole
+        surfaceTintColor: Colors.transparent, 
+        clipBehavior: Clip.antiAlias,         
         shape: const CircularNotchedRectangle(), 
         notchMargin: 8,
         child: SizedBox(
@@ -195,7 +222,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               _buildNavIcon(0, Icons.grid_view_rounded, "CORE"),
               _buildNavIcon(1, Icons.folder_special, "VAULT"),
-              const SizedBox(width: 40), // Leaves space for the floating button
+              const SizedBox(width: 40), 
               _buildNavIcon(2, Icons.shield_outlined, "RADAR"),
               _buildNavIcon(3, Icons.settings_outlined, "SYSTEM"),
             ],

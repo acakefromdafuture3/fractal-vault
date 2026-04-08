@@ -5,11 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:local_auth/local_auth.dart'; 
-import 'package:file_picker/file_picker.dart'; 
 import 'package:open_filex/open_filex.dart'; 
-
+import 'dart:typed_data';
+import 'package:path_provider/path_provider.dart';
+import '../services/encryption_service.dart';
+import '../services/cloud_dispatcher.dart';
 import '../services/secret_vault_service.dart';
-import '../services/vault_service.dart';
+import '../services/vault_dispatcher.dart'; // 🔥 The new cryptographic brain
 
 class SecretVaultScreen extends StatefulWidget {
   const SecretVaultScreen({Key? key}) : super(key: key);
@@ -219,11 +221,9 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
     }
   }
 
-  // 🔥 NEW: Show the "Move To" Bottom Sheet
   Future<void> _showMoveMenu() async {
     if (_selectedSecretDocs.isEmpty) return;
 
-    // Grab all available folders from Firebase
     final folderSnapshot = await FirebaseFirestore.instance.collection('vault_folders').orderBy('createdAt').get();
     final folders = folderSnapshot.docs;
 
@@ -247,15 +247,13 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
                 child: SingleChildScrollView(
                   child: Column(
                     children: [
-                      // Option to move BACK to Unsorted (Only show if we aren't already in Unsorted)
                       if (_activeFolderId != 'unsorted')
                         ListTile(
                           leading: const Icon(Icons.all_inbox, color: Colors.lightBlue),
                           title: const Text("Unsorted Secrets", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
-                          onTap: () => _executeMove(null), // null = unsorted
+                          onTap: () => _executeMove(null),
                         ),
                       
-                      // List all the other custom folders
                       ...folders.where((f) => f.id != _activeFolderId).map((folder) {
                         return ListTile(
                           leading: const Icon(Icons.folder, color: Colors.lightBlue),
@@ -281,9 +279,8 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
     );
   }
 
-  // 🔥 NEW: Execute the batch move
   Future<void> _executeMove(String? targetFolderId) async {
-    Navigator.pop(context); // Close the bottom sheet menu
+    Navigator.pop(context); 
     
     final batch = FirebaseFirestore.instance.batch();
     for (String docId in _selectedSecretDocs) {
@@ -342,50 +339,68 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
     }
   }
 
+  // 🔥 UPGRADED: Now runs entirely through the VaultDispatcher
   Future<void> _addFileDirectlyToSecretVault() async {
     try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles();
+      setState(() => _isLoading = true);
 
-      if (result != null && result.files.single.path != null) {
-        String filePath = result.files.single.path!;
-        String originalName = result.files.single.name;
-        String extension = result.files.single.extension ?? originalName.split('.').last.toLowerCase();
-        int fileSize = result.files.single.size; 
+      // We pass the active folder ID into the dispatcher so it knows where to map the shards
+      await VaultDispatcher.initiateSecureUpload(
+        context,
+        folderId: _activeFolderId == 'unsorted' ? null : _activeFolderId,
+        isSecret: true
+      );
 
-        await VaultService().uploadFile(
-          name: originalName,
-          path: filePath,
-          extension: extension,
-          size: fileSize,
-          isSecret: true,
-          folderId: _activeFolderId == 'unsorted' ? null : _activeFolderId,
-        );
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text("$originalName secured in vault!"), 
-            backgroundColor: Colors.lightBlue,
-            behavior: SnackBarBehavior.floating,
-          ));
-        }
-      }
     } catch (e) {
-      debugPrint("Error uploading file: $e");
+      debugPrint("Secret Vault Upload Error: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _openSecretFile(Map<String, dynamic> fileData) async {
-    if (fileData['path'] != null) {
-      try {
-        File physicalFile = File(fileData['path']);
-        if (!await physicalFile.exists()) {
-          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("ERROR: File missing from local storage."), backgroundColor: Colors.redAccent));
-          return; 
-        }
-        await OpenFilex.open(fileData['path']);
-      } catch (e) {
-        debugPrint("Error opening file: $e");
+    setState(() => _isLoading = true);
+
+    try {
+      final String fileId = fileData['docId'];
+      final List<String> shards = List<String>.from(fileData['shards']);
+      final String ivBase64 = fileData['iv'];
+      final String extension = fileData['extension'];
+
+      // 1. Fetch the Encrypted Bytes from the Cloud
+      final cloud = CloudDispatcher();
+      Uint8List? encryptedBytes = await cloud.downloadFromSupabase(fileId);
+
+      if (encryptedBytes == null) {
+        throw Exception("Failed to retrieve encrypted data from nodes.");
       }
+
+      // 2. Re-forge the Master AES Key using the Shards
+      final crypto = EncryptionService();
+      String recoveredKey = crypto.rebuildAesKey(shards);
+
+      // 3. Decrypt the heavy file
+      Uint8List plainBytes = crypto.decryptHeavyFile(encryptedBytes, recoveredKey, ivBase64);
+
+      // 4. Save to a temporary, highly volatile cache directory
+      final tempDir = await getTemporaryDirectory();
+      // We use the timestamp so old previews don't overwrite each other if open simultaneously 
+      final tempFile = File('${tempDir.path}/decrypted_$fileId.$extension');
+      await tempFile.writeAsBytes(plainBytes);
+
+      // 5. Open the file natively on the phone!
+      await OpenFilex.open(tempFile.path);
+
+    } catch (e) {
+      debugPrint("Reconstruction Error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Reconstruction Failed: $e"),
+          backgroundColor: Colors.redAccent,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -405,7 +420,6 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
             ),
             title: Text("${_selectedSecretDocs.length} Selected", style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
             actions: [
-              // 🔥 NEW: The Move Button in the AppBar
               IconButton(
                 icon: const Icon(Icons.drive_file_move, color: Colors.lightBlue, size: 26),
                 onPressed: _showMoveMenu,

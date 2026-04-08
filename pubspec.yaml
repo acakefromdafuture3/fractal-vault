@@ -25,6 +25,8 @@ dependencies:
   http: ^1.2.0 # Added this for your CloudDispatcher!
   crypto: ^3.0.7
   image_picker: ^1.2.1
+  encrypt: ^5.0.3
+  path_provider: ^2.1.5
 
 dev_dependencies:
   flutter_test:
