@@ -8,6 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/doodle_background.dart';
 import 'login_screen.dart';
 import 'operator_profile_screen.dart';
+import '../services/email_service.dart';
+import 'otp_verification_screen.dart';
 
 class SystemProtocolsScreen extends StatefulWidget {
   const SystemProtocolsScreen({super.key});
@@ -115,6 +117,8 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
 
   Future<void> _resetSecretVaultPin() async {
     if (_isProcessing) return;
+    
+    final email = user?.email ?? "operator@fractalvault.com";
 
     bool? confirm = await showDialog<bool>(
       context: context,
@@ -122,7 +126,7 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
         backgroundColor: const Color(0xFF0D2137),
         title: const Text("RESET SECRET PIN?", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
         content: Text(
-          "To reset your Secret Vault PIN, a secure verification link will be sent to your registered channel:\n\n${user?.email ?? 'Unknown Agent'}\n\nProceed with transmission?", 
+          "To reset your Secret Vault PIN, a secure 6-digit code will be sent to your registered channel:\n\n$email\n\nProceed with transmission?", 
           style: const TextStyle(color: Colors.white70)
         ),
         actions: [
@@ -133,7 +137,7 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text("SEND LINK", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+            child: const Text("SEND CODE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
           ),
         ],
       )
@@ -141,18 +145,38 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
 
     if (confirm == true) {
       setState(() => _isProcessing = true);
-      
       if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text("Secure link dispatched. Awaiting verification..."), 
-          backgroundColor: Colors.blueAccent,
-          duration: Duration(seconds: 3),
-        ));
-      }
+      
+      try {
+        // 🔥 This is the engine call that was missing!
+        final otpCode = await EmailService().dispatchPinResetOtp(email);
 
-      await Future.delayed(const Duration(seconds: 1)); 
-      if (mounted) setState(() => _isProcessing = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text("✅ Code Dispatched: Check your inbox"), 
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ));
+
+          // Move to the OTP Verification Screen
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => OtpVerificationScreen(validOtp: otpCode),
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text("❌ Protocol Failure: $e"), 
+            backgroundColor: Colors.redAccent,
+            duration: const Duration(seconds: 3),
+          ));
+        }
+      } finally {
+        if (mounted) setState(() => _isProcessing = false);
+      }
     }
   }
 
