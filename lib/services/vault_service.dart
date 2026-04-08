@@ -1,32 +1,48 @@
+import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'cloud_dispatcher.dart'; 
 
 class VaultService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final CloudDispatcher _cloud = CloudDispatcher(); // Initialize your nodes
 
-  // 🔥 THE MASTER UPLOAD PORTAL (Ritankar takes control!)
-  Future<void> uploadFile({
+  /// 🔥 THE ENCRYPTED MULTI-NODE PORTAL
+  /// 🔥 THE ENCRYPTED MULTI-NODE PORTAL
+  Future<void> uploadEncryptedFile({
     required String name,
-    required String path,
     required String extension,
-    required int size,
-    required bool isSecret,
-    String? folderId, // 🔥 ADDED: Optional parameter for Tista's new Folder feature!
+    required Uint8List encryptedBytes,
+    required String iv,
+    required List<String> shards,
+    String? folderId,
+    bool isSecret = false, // 🔥 NEW: The Routing Switch (Defaults to false)
   }) async {
-    
-    // 1. You handle the translation automatically!
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception("No authenticated operator found.");
+
+    final String fileId = DateTime.now().millisecondsSinceEpoch.toString();
     String cleanType = _normalizeCategory(extension);
 
-    // 2. You safely write it to the database with all required fields
-    await _db.collection('vault_files').add({
+    final Map<String, String> nodeLinks = await _cloud.disperseToNodes(
+      fileId: fileId,
+      bytes: encryptedBytes,
+      extension: extension,
+    );
+
+    // SECURE THE METADATA & SHARDS IN FIRESTORE
+    await _db.collection('vault_files').doc(fileId).set({
+      'ownerId': user.uid, // 🔒 Links the file strictly to the logged-in user
       'name': name,
-      'path': path,
       'type': cleanType,
-      'extension': extension, 
-      'size': size,
-      'status': 'Secured',
-      'isSecret': isSecret, 
-      'folderId': folderId, // 🔥 ADDED: Saves it safely to the database
+      'extension': extension,
+      'iv': iv,             
+      'shards': shards,     
+      'nodeLinks': nodeLinks, 
+      'isSecret': isSecret, // 🔥 NEW: Uses the switch to route the file!
+      'folderId': folderId,
       'dateAdded': FieldValue.serverTimestamp(),
+      'status': 'Shattered', 
     });
   }
 

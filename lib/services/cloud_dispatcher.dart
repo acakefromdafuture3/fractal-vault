@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:convert';
 import 'package:crypto/crypto.dart'; // 🔥 For Cloudinary Signatures
+import 'local_node_manager.dart';
 class CloudDispatcher {
   
   // ==========================================
@@ -194,6 +195,71 @@ class CloudDispatcher {
     } catch (e) {
       print("❌ NODE 4 NETWORK ERROR: $e");
       return false;
+    }
+  }
+  /// 🔥 THE MASTER SCATTER PROTOCOL
+  Future<Map<String, String>> disperseToNodes({
+    required String fileId, 
+    required Uint8List bytes, 
+    required String extension
+  }) async {
+    print("🛰️ INITIALIZING MULTI-NODE DISPERSION...");
+
+    // 1. Trigger the 4 Cloud Nodes simultaneously (These all return Bools)
+    final results = await Future.wait([
+      uploadToSupabase(fileId: fileId, shardBytes: bytes),
+      uploadToAppwrite(fileId: fileId, shardBytes: bytes),
+      uploadToCloudinary(fileId: fileId, shardBytes: bytes),
+      uploadToImageKit(fileId: fileId, shardBytes: bytes),
+    ]);
+
+    // 2. Trigger the Local Node safely on its own
+    bool localStatus = false;
+    try {
+      await LocalNodeManager().securePhysicalKey(fileId: fileId, shardBytes: bytes);
+      localStatus = true;
+    } catch (e) {
+      print("❌ NODE 5 (LOCAL) FAILED: $e");
+    }
+
+    // Return the final network map
+    return {
+      'supabase': results[0] ? "active" : "failed",
+      'appwrite': results[1] ? "active" : "failed",
+      'cloudinary': results[2] ? "active" : "failed",
+      'imagekit': results[3] ? "active" : "failed",
+      'local': localStatus ? "active" : "failed", 
+    };
+  }
+
+  // =========================================================================
+  // 📥 DOWNLOAD LOGIC (Fetching from Supabase as Primary Node)
+  // =========================================================================
+  Future<Uint8List?> downloadFromSupabase(String fileId) async {
+    print("========================================");
+    print("📥 INITIATING DOWNLOAD FROM NODE 1...");
+
+    // Matches the exact filename convention we used in uploadToSupabase
+    final String apiUrl = "$_supabaseUrl/storage/v1/object/$_supabaseBucket/$fileId-shard1.bin";
+
+    try {
+      final response = await http.get(
+        Uri.parse(apiUrl),
+        headers: {
+          "Authorization": "Bearer $_supabaseSecretKey",
+        },
+      );
+
+      if (response.statusCode == 200) {
+        print("✅ DOWNLOAD COMPLETE: ${response.bodyBytes.length} bytes secured.");
+        return response.bodyBytes;
+      } else {
+        print("❌ DOWNLOAD FAILED: ${response.statusCode}");
+        return null;
+      }
+    } catch (e) {
+      print("❌ NETWORK ERROR DURING DOWNLOAD: $e");
+      return null;
     }
   }
 }

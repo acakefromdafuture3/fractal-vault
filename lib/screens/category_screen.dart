@@ -1,13 +1,17 @@
 // Location: lib/screens/category_screen.dart
 
 import 'dart:io'; 
+import 'dart:typed_data'; // 🔥 Needed for the byte arrays
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; 
 import 'package:open_filex/open_filex.dart'; 
 import 'package:shared_preferences/shared_preferences.dart'; 
+import 'package:path_provider/path_provider.dart'; // 🔥 Needed for temporary decryption
 
 import '../services/vault_service.dart'; 
 import '../services/security_service.dart'; 
+import '../services/encryption_service.dart'; // 🔥 The Math Engine
+import '../services/cloud_dispatcher.dart';   // 🔥 The Cloud Downloader
 import 'vault_setup_wizard.dart'; 
 import 'secret_vault_screen.dart'; 
 import '../widgets/doodle_background.dart';
@@ -61,6 +65,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
     }
   }
 
+  // 🔥 UPGRADED: The true Reconstruction Engine is now here!
   Future<void> _openVaultFile(Map<String, dynamic> fileData) async {
     final String fileName = fileData['name'] ?? "Unknown";
     
@@ -68,43 +73,59 @@ class _CategoryScreenState extends State<CategoryScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Row(children: [
         const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
-        const SizedBox(width: 15), Expanded(child: Text("Decrypting: $fileName...", overflow: TextOverflow.ellipsis)),
+        const SizedBox(width: 15), Expanded(child: Text("Reconstructing: $fileName...", overflow: TextOverflow.ellipsis)),
       ]),
-      backgroundColor: const Color(0xFF0D2137), duration: const Duration(seconds: 1), 
+      backgroundColor: const Color(0xFF0D2137), duration: const Duration(seconds: 3), 
     ));
 
-    await Future.delayed(const Duration(seconds: 1));
-    if (_selectedDocs.isNotEmpty || !mounted) { ScaffoldMessenger.of(context).hideCurrentSnackBar(); return; }
+    if (_selectedDocs.isNotEmpty || !mounted) { 
+      ScaffoldMessenger.of(context).hideCurrentSnackBar(); 
+      return; 
+    }
 
-    if (fileData['path'] != null) {
-      try {
-        File physicalFile = File(fileData['path']);
-        
-        if (!await physicalFile.exists()) {
-          await _securityMonitor.logBreachAttempt(
-            target: fileName, ipAddress: "UNKNOWN (Spoofed)", location: "Unverified Node", deviceType: "Hostile Interceptor",
-          );
-          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("SYSTEM ERROR: Local cache missing or tampered."), backgroundColor: Colors.redAccent));
-          return; 
-        }
+    try {
+      final String fileId = fileData['docId'];
+      final List<String> shards = List<String>.from(fileData['shards'] ?? []);
+      final String ivBase64 = fileData['iv'];
+      final String extension = fileData['extension'];
 
-        final result = await OpenFilex.open(fileData['path']);
-        
-        if (result.type == ResultType.done) {
-          await _securityMonitor.logAuthorizedAccess(
-            target: fileName, ipAddress: "192.168.Secure", location: "Encrypted Tunnel", deviceType: "Trusted Mobile Client", accessedBy: "Verified Recipient",
-          );
-        } else {
-          await _securityMonitor.logBreachAttempt(
-            target: fileName, ipAddress: "DETECTED: 10.0.x.x", location: "External OS Rejection", deviceType: "Untrusted Sandbox",
-          );
-          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("OS Warning: ${result.message}"), backgroundColor: Colors.orange));
-        }
-      } catch (e) {
-        await _securityMonitor.logBreachAttempt(
-          target: fileName, ipAddress: "HOSTILE IP", location: "Unknown Origin", deviceType: "Brute Force Tool",
-        );
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("CRASH: Decryption Tampering Detected"), backgroundColor: Colors.red));
+      // 1. Download encrypted bytes from Node 1 (Supabase)
+      final cloud = CloudDispatcher();
+      Uint8List? encryptedBytes = await cloud.downloadFromSupabase(fileId);
+
+      if (encryptedBytes == null) throw Exception("Node 1 unreachable or file missing.");
+
+      // 2. Rebuild Key & Decrypt
+      final crypto = EncryptionService();
+      String recoveredKey = crypto.rebuildAesKey(shards);
+      Uint8List plainBytes = crypto.decryptHeavyFile(encryptedBytes, recoveredKey, ivBase64);
+
+      // 3. Save to Temp Cache
+      final tempDir = await getTemporaryDirectory();
+      final tempFile = File('${tempDir.path}/view_$fileId.$extension');
+      await tempFile.writeAsBytes(plainBytes);
+
+      // 4. Log successful access to the Dashboard Radar
+      await _securityMonitor.logAuthorizedAccess(
+        target: fileName, ipAddress: "192.168.Secure", location: "Encrypted Tunnel", deviceType: "Trusted Mobile Client", accessedBy: "Verified Recipient",
+      );
+
+      // 5. Open it natively!
+      await OpenFilex.open(tempFile.path);
+
+    } catch (e) {
+      debugPrint("Decryption Error: $e");
+      
+      // Log the failure to the radar
+      await _securityMonitor.logBreachAttempt(
+        target: fileName, ipAddress: "HOSTILE IP", location: "Unknown Origin", deviceType: "Brute Force Tool",
+      );
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("CRASH: $e"), 
+          backgroundColor: Colors.redAccent
+        ));
       }
     }
   }
@@ -264,7 +285,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
                     final files = snapshot.data ?? [];
                     if (files.isEmpty) return const Center(child: Text("NO RECORDS FOUND.", style: TextStyle(color: Colors.white54, letterSpacing: 2)));
                     return ListView.builder(
-                      // 🔥 THE FIX: Added 120 pixels of padding to the bottom so the last file clears the FAB!
                       padding: const EdgeInsets.only(left: 20, right: 20, top: 10, bottom: 120), 
                       itemCount: files.length,
                       itemBuilder: (context, index) {
