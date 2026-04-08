@@ -6,8 +6,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart'; 
-import 'package:path_provider/path_provider.dart'; // 🔥 Needed for temporary decryption
-import 'package:open_filex/open_filex.dart';       // 🔥 Needed to open the decrypted file
+import 'package:path_provider/path_provider.dart'; 
+import 'package:open_filex/open_filex.dart';       
 
 import 'home_screen.dart';
 import 'category_screen.dart'; 
@@ -16,9 +16,8 @@ import 'system_protocols_screen.dart';
 import '../widgets/doodle_background.dart';
 
 import '../services/vault_service.dart';
-import '../services/vault_dispatcher.dart';
 import '../services/encryption_service.dart';
-import '../services/cloud_dispatcher.dart'; // 🔥 Needed to download the heavy file
+import '../services/cloud_dispatcher.dart'; 
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -29,11 +28,8 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _currentNavIndex = 0; 
-  bool _isUploading = false; 
+  bool _isProcessing = false; // 🔥 Renamed to clarify it just locks the buttons now, no tiny spinner!
 
-  // 🔥 THE RECONSTRUCTION ENGINE
-  // (Note: If your "Recent Activity" list is actually built inside category_screen.dart, 
-  // you will need to copy this exact method into that file so the list tiles can call it!)
   Future<void> _viewSecureFile(Map<String, dynamic> fileData) async {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Fetching shards and decrypting..."), duration: Duration(seconds: 2))
@@ -45,23 +41,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final String ivBase64 = fileData['iv'];
       final String extension = fileData['extension'];
 
-      // 1. Download encrypted bytes from Node 1 (Supabase)
       final cloud = CloudDispatcher();
       Uint8List? encryptedBytes = await cloud.downloadFromSupabase(fileId);
 
       if (encryptedBytes == null) throw Exception("Node 1 unreachable.");
 
-      // 2. Rebuild Key & Decrypt
       final crypto = EncryptionService();
       String recoveredKey = crypto.rebuildAesKey(shards);
       Uint8List plainBytes = crypto.decryptHeavyFile(encryptedBytes, recoveredKey, ivBase64);
 
-      // 3. Save to Temp Cache
       final tempDir = await getTemporaryDirectory();
       final tempFile = File('${tempDir.path}/view_$fileId.$extension');
       await tempFile.writeAsBytes(plainBytes);
 
-      // 4. Open it natively!
       await OpenFilex.open(tempFile.path);
 
     } catch (e) {
@@ -88,31 +80,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10))),
             const SizedBox(height: 20),
             
-            // 🛡️ SECURE SINGLE UPLOAD
             ListTile(
-              // 🔥 CHANGED: Swapped Icons.security for Icons.upload_file
               leading: const Icon(Icons.upload_file, color: Colors.greenAccent, size: 28), 
               title: const Text("Secure Single File", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
               subtitle: const Text("Encrypt & shatter across 5 nodes", style: TextStyle(color: Colors.white54, fontSize: 12)),
-              onTap: () async {
+              onTap: () {
                 Navigator.pop(context); 
-                setState(() => _isUploading = true); 
-                
-                // Triggers the Centralized Vault Dispatcher
-                await VaultDispatcher.initiateSecureUpload(context); 
-                
-                if (mounted) setState(() => _isUploading = false);
+                _pickAndSecureFiles(colors, isMultiple: false); 
               },
             ),
 
-            // 📦 MULTIPLE FILES (BULK UPLOAD)
             ListTile(
               leading: const Icon(Icons.library_add, color: Color(0xFF90CAFF), size: 28),
               title: const Text("Multiple Files (Bulk)", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
               subtitle: const Text("Select multiple items at once", style: TextStyle(color: Colors.white54, fontSize: 12)),
               onTap: () {
                 Navigator.pop(context);
-                _pickAndLogMetadata(colors, isMultiple: true); 
+                _pickAndSecureFiles(colors, isMultiple: true); 
               },
             ),
             const SizedBox(height: 20),
@@ -122,7 +106,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Future<void> _pickAndLogMetadata(ColorScheme colors, {required bool isMultiple}) async {
+  Future<void> _pickAndSecureFiles(ColorScheme colors, {required bool isMultiple}) async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -136,15 +120,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       if (result == null || result.files.isEmpty) return; 
 
-      setState(() => _isUploading = true);
+      setState(() => _isProcessing = true);
 
-      // 🔥 Triggers the Shard Explosion animation
+      // 🔥 1. SHOW THE ANIMATION FIRST
       showDialog(
         context: context,
         barrierDismissible: false, 
         builder: (context) => const ShardingAnimationDialog(),
       );
 
+      // 🔥 2. THE MAGIC FIX: Give Flutter exactly 600 milliseconds to draw the animation
+      // before we lock up the CPU with heavy encryption math!
+      await Future.delayed(const Duration(milliseconds: 600));
+
+      // 3. Now we can safely do the heavy lifting in the background
       for (var file in result.files) {
         if (file.path == null) continue; 
         
@@ -152,16 +141,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         String fileName = file.name;
         String extension = file.extension ?? fileName.split('.').last.toLowerCase();
 
-        // 1. Read the massive file into memory
         final fileBytes = await File(filePath).readAsBytes();
 
-        // 2. Execute Cryptographic Pipeline
         final engine = EncryptionService();
         final aesKey = engine.generateMasterAesKey();
         final encryptedData = engine.encryptHeavyFile(fileBytes, aesKey);
         final keyShards = engine.shredAesKey(aesKey);
 
-        // 3. Send to the VaultService (which automatically triggers your 5 nodes)
         await VaultService().uploadEncryptedFile(
           name: fileName,
           extension: extension,
@@ -172,14 +158,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
 
       if (mounted) {
-        Navigator.pop(context); // Close dialog
+        Navigator.pop(context); // Close the animation dialog
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text("${result.files.length} File(s) Secured & Shattered!"), 
           backgroundColor: Colors.green
         ));
       }
     } catch (e) {
-      if (mounted) Navigator.pop(context); 
+      if (mounted) Navigator.pop(context); // Make sure to close the dialog if an error happens
       debugPrint("Error: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -188,7 +174,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ));
       }
     } finally {
-      if (mounted) setState(() => _isUploading = false);
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 
@@ -209,13 +195,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: pages[_currentNavIndex],
       
       floatingActionButton: FloatingActionButton(
-        onPressed: _isUploading ? null : () => _showUploadOptions(colors),
+        onPressed: _isProcessing ? null : () => _showUploadOptions(colors),
         shape: const CircleBorder(), 
         elevation: 2,
-        backgroundColor: _isUploading ? Colors.grey : const Color(0xFF90CAFF), 
-        child: _isUploading 
-            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Color(0xFF0D2137), strokeWidth: 2)) 
-            : const Icon(Icons.add, size: 32, color: Color(0xFF0D2137)), 
+        backgroundColor: _isProcessing ? Colors.grey : const Color(0xFF90CAFF), 
+        // 🔥 REMOVED THE SPINNER: Now it just stays a static icon, letting the main screen animation do the talking!
+        child: const Icon(Icons.add, size: 32, color: Color(0xFF0D2137)), 
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       
@@ -266,7 +251,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
   }
-} // 🔥 Notice how the DashboardScreen state safely ends here!
+} 
 
 // =====================================================================
 // 🔥 THE PURE SHARDING ANIMATION (CINEMATIC SLOW-MOTION)
@@ -341,19 +326,13 @@ class _ShardingAnimationDialogState extends State<ShardingAnimationDialog> with 
                 builder: (context, child) {
                   final double progress = _explodeProgress.value;
                   
-                  // The solid file vanishes smoothly
                   final double fileOpacity = 1.0 - (progress * 3).clamp(0.0, 1.0); 
-                  
-                  // The shards fade in fast, then fade out slowly as they fly away
                   final double shardOpacity = progress < 0.1 ? (progress * 10) : (1.0 - progress);
-                  
-                  // The shards travel exactly 45 pixels outward
                   final double distance = progress * 45.0; 
 
                   return Stack(
                     alignment: Alignment.center,
                     children: [
-                      // 1. The 5 Flying Shards!
                       ...List.generate(5, (index) {
                         final double angle = (index * (360 / 5)) * (math.pi / 180);
                         final double dx = math.cos(angle) * distance;
@@ -364,14 +343,13 @@ class _ShardingAnimationDialogState extends State<ShardingAnimationDialog> with 
                           child: Opacity(
                             opacity: shardOpacity,
                             child: Transform.rotate(
-                              angle: progress * math.pi * 3, // Smooth, slow spinning
+                              angle: progress * math.pi * 3, 
                               child: const Icon(Icons.change_history, color: Color(0xFF90CAFF), size: 24), 
                             ),
                           ),
                         );
                       }),
                       
-                      // 2. The Main File (shrinks and fades)
                       Transform.scale(
                         scale: 1.0 - (progress * 0.4), 
                         child: Opacity(
