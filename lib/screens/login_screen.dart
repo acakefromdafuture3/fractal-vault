@@ -2,8 +2,8 @@
 
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
-import 'dashboard_screen.dart';
-import 'register_screen.dart'; // Import the new register screen
+import 'master_pin_auth_screen.dart'; // 🔥 NEW: Importing the Gatekeeper!
+import 'register_screen.dart'; 
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -26,7 +26,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
 
-    // Calling the correct Firebase method from your service
     var user = await _authService.loginWithEmail(
       _emailController.text.trim(),
       _passwordController.text.trim(),
@@ -37,7 +36,8 @@ class _LoginScreenState extends State<LoginScreen> {
     if (user != null) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => DashboardScreen()), // 🔥 FIXED: No const here!
+        // 🔥 CHANGED: Now pushes to the Auth Screen instead of the Dashboard!
+        MaterialPageRoute(builder: (context) => const MasterPinAuthScreen()), 
       );
     } else {
       _showError("Access Denied. Please verify credentials.");
@@ -52,7 +52,8 @@ class _LoginScreenState extends State<LoginScreen> {
     if (user != null) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => DashboardScreen()), // 🔥 FIXED: Removed the hidden const here!
+        // 🔥 CHANGED: Now pushes to the Auth Screen instead of the Dashboard!
+        MaterialPageRoute(builder: (context) => const MasterPinAuthScreen()), 
       );
     } else {
       _showError("Google Auth Failed: Check Terminal or Firebase Setup.");
