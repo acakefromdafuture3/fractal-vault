@@ -44,8 +44,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
 
   void _refreshStream() {
     if (_selectedCategoryId == 'recent') {
-      // 🔥 THE FIX: Instead of calling the limited 'getRecentFiles()', 
-      // we grab ALL files and sort them from newest to oldest!
       _vaultStream = _vaultService.getVaultFiles().map((files) {
         final sortedFiles = List<Map<String, dynamic>>.from(files);
         sortedFiles.sort((a, b) {
@@ -266,8 +264,8 @@ class _CategoryScreenState extends State<CategoryScreen> {
                     final files = snapshot.data ?? [];
                     if (files.isEmpty) return const Center(child: Text("NO RECORDS FOUND.", style: TextStyle(color: Colors.white54, letterSpacing: 2)));
                     return ListView.builder(
-                      // Removed the massive bottom padding so it doesn't leave an empty gap anymore!
-                      padding: const EdgeInsets.only(left: 20, right: 20, bottom: 20), 
+                      // 🔥 THE FIX: Added 120 pixels of padding to the bottom so the last file clears the FAB!
+                      padding: const EdgeInsets.only(left: 20, right: 20, top: 10, bottom: 120), 
                       itemCount: files.length,
                       itemBuilder: (context, index) {
                         final file = files[index];
@@ -285,7 +283,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
             ],
           ),
         ),
-      ], // BOTTOM BAR POSITIONED WIDGET HAS BEEN COMPLETELY REMOVED!
+      ],
     );
   }
 
@@ -339,7 +337,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
     );
   }
 
-  // 🔥 UPDATED SELECTION HEADER: Now holds both the Shield and the Trash Can side-by-side!
   Widget _buildSelectionHeader() {
     return Container(
       height: 48, padding: const EdgeInsets.symmetric(horizontal: 10),
