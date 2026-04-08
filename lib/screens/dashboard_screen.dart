@@ -8,7 +8,7 @@ import 'package:file_picker/file_picker.dart';
 
 import 'home_screen.dart';
 import 'category_screen.dart'; 
-import 'security_logs_screen.dart'; // 🔥 BRINGING THE 3RD TAB BACK!
+import 'security_logs_screen.dart'; 
 import 'system_protocols_screen.dart'; 
 import '../widgets/doodle_background.dart';
 import '../services/vault_service.dart';
@@ -70,9 +70,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: [
-        'pdf', 'txt', 'jpg', 'png', 'doc', 'docx', // Original
-        'mp4', 'mov', 'mkv', 'avi',                // 🔥 Unlocks Videos!
-        'mp3', 'wav', 'm4a', 'aac'                 // 🔥 Unlocks Audios!
+        'pdf', 'txt', 'jpg', 'png', 'doc', 'docx', 
+        'mp4', 'mov', 'mkv', 'avi',                
+        'mp3', 'wav', 'm4a', 'aac'                 
       ],
       allowMultiple: isMultiple,
       );
@@ -99,58 +99,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ShredderEngine shredder = ShredderEngine();
           List<Uint8List> myShards = shredder.sliceFile(fileBytes);
           
-          // Use a simple, short ID for Appwrite compatibility
           String testFileId = "doc_${DateTime.now().millisecondsSinceEpoch}"; 
 
           CloudDispatcher cloudDispatcher = CloudDispatcher();
           LocalNodeManager localNode = LocalNodeManager();
 
-          // 🚀 1. FIRE SHARD 1 TO SUPABASE
-          await cloudDispatcher.uploadToSupabase(
-            fileId: testFileId, 
-            shardBytes: myShards[0] 
-          );
+          await cloudDispatcher.uploadToSupabase(fileId: testFileId, shardBytes: myShards[0]);
+          await cloudDispatcher.uploadToAppwrite(fileId: testFileId, shardBytes: myShards[1]);
+          await cloudDispatcher.uploadToCloudinary(fileId: testFileId, shardBytes: myShards[2]);
+          await cloudDispatcher.uploadToImageKit(fileId: testFileId, shardBytes: myShards[3]);
+          await localNode.securePhysicalKey(fileId: testFileId, shardBytes: myShards[4]);
 
-          // 🚀 2. FIRE SHARD 2 TO APPWRITE
-          await cloudDispatcher.uploadToAppwrite(
-            fileId: testFileId, 
-            shardBytes: myShards[1] 
-          );
-
-          // 🚀 3. FIRE SHARD 3 TO CLOUDINARY (SIGNED)
-          await cloudDispatcher.uploadToCloudinary(
-            fileId: testFileId, 
-            shardBytes: myShards[2] 
-          );
-
-          // 🚀 4. FIRE SHARD 4 TO IMAGEKIT
-          await cloudDispatcher.uploadToImageKit(
-            fileId: testFileId, 
-            shardBytes: myShards[3] 
-          );
-
-          // 💾 5. BURY SHARD 5 IN THE HARDWARE
-          await localNode.securePhysicalKey(
-            fileId: testFileId,
-            shardBytes: myShards[4] 
-          );
-
-          // ==========================================
-          // 🧬 PHASE 2: THE RECONSTRUCTION TEST
-          // ==========================================
           print("⏳ Waiting 2 seconds before attempting reconstruction...");
           await Future.delayed(const Duration(seconds: 2));
 
           ReconstructionEngine reconstructor = ReconstructionEngine();
-          
-          // Feeding it exactly 3 shards to prove the threshold works.
-          // Shard 0 (Supabase), Shard 2 (Cloudinary), and Shard 4 (Local Hardware)
-          List<Uint8List> vaultShards = [
-            myShards[0], 
-            myShards[2], // Testing the new Cloudinary shard!
-            myShards[4]  
-          ];
-
+          List<Uint8List> vaultShards = [myShards[0], myShards[2], myShards[4]];
           reconstructor.rebuildFile(vaultShards);
 
         } catch (e) {
@@ -198,35 +162,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final List<Widget> pages = [
       const HomeScreen(),
       const CategoryScreen(),
-      const SecurityLogsScreen(), // 🔥 Tab 3 is active!
-      const SystemProtocolsScreen(), // 🔥 Tab 4 is active!
+      const SecurityLogsScreen(), 
+      const SystemProtocolsScreen(), 
     ];
 
     return Scaffold(
       extendBody: true, 
+      backgroundColor: Colors.transparent, // 🔥 Stops the default Scaffold white background from bleeding
       body: pages[_currentNavIndex],
+      
       floatingActionButton: FloatingActionButton(
         onPressed: _isUploading ? null : () => _showUploadOptions(colors),
+        shape: const CircleBorder(), // 🔥 THE FIX: Forces the button to be a perfect circle!
+        elevation: 2,
         backgroundColor: _isUploading ? Colors.grey : const Color(0xFF90CAFF), 
         child: _isUploading 
             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Color(0xFF0D2137), strokeWidth: 2)) 
-            : const Icon(Icons.add, size: 32),
+            : const Icon(Icons.add, size: 32, color: Color(0xFF0D2137)), // Made icon dark so it pops!
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      
       bottomNavigationBar: BottomAppBar(
         color: const Color(0xFF0D2137), 
+        surfaceTintColor: Colors.transparent, // 🔥 Kills the ugly Material 3 white tint overlay
+        clipBehavior: Clip.antiAlias,         // 🔥 Smooths the jagged edges of the cutout hole
         shape: const CircularNotchedRectangle(), 
         notchMargin: 8,
         child: SizedBox(
-          height: 60,
+          height: 70, 
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildNavIcon(0, Icons.grid_view_rounded),
-              _buildNavIcon(1, Icons.folder_special),
-              const SizedBox(width: 40), 
-              _buildNavIcon(2, Icons.shield_outlined),
-              _buildNavIcon(3, Icons.settings_outlined),
+              _buildNavIcon(0, Icons.grid_view_rounded, "CORE"),
+              _buildNavIcon(1, Icons.folder_special, "VAULT"),
+              const SizedBox(width: 40), // Leaves space for the floating button
+              _buildNavIcon(2, Icons.shield_outlined, "RADAR"),
+              _buildNavIcon(3, Icons.settings_outlined, "SYSTEM"),
             ],
           ),
         ),
@@ -234,11 +205,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildNavIcon(int index, IconData icon) {
+  Widget _buildNavIcon(int index, IconData icon, String label) {
     final isSelected = _currentNavIndex == index;
-    return IconButton(
-      icon: Icon(icon, color: isSelected ? const Color(0xFF90CAFF) : Colors.white.withOpacity(0.4), size: 28),
-      onPressed: () => setState(() => _currentNavIndex = index),
+    final color = isSelected ? const Color(0xFF90CAFF) : Colors.white.withOpacity(0.4);
+    
+    return InkWell(
+      onTap: () => setState(() => _currentNavIndex = index),
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 26),
+            const SizedBox(height: 4),
+            Text(
+              label, 
+              style: TextStyle(
+                color: color, 
+                fontSize: 10, 
+                fontWeight: FontWeight.bold, 
+                letterSpacing: 1.0, 
+              )
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

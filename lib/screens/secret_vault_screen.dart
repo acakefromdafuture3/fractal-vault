@@ -31,7 +31,6 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
   String? _activeFolderId;
   String? _activeFolderName;
 
-  // 🔥 NEW: Tracks which files are selected for deletion!
   final Set<String> _selectedSecretDocs = {};
 
   @override
@@ -137,7 +136,6 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
     }
   }
 
-  // 🔥 NEW: Delete an entire folder and everything inside it!
   Future<void> _deleteFolder(String folderId, String folderName) async {
     bool? confirm = await showDialog<bool>(
       context: context,
@@ -157,13 +155,11 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
     );
 
     if (confirm == true) {
-      // 1. Delete all the files inside the folder first
       final files = await FirebaseFirestore.instance.collection('vault_files').where('folderId', isEqualTo: folderId).get();
       final batch = FirebaseFirestore.instance.batch();
       for(var doc in files.docs) {
         batch.delete(doc.reference);
       }
-      // 2. Delete the folder itself
       batch.delete(FirebaseFirestore.instance.collection('vault_folders').doc(folderId));
       await batch.commit();
 
@@ -176,7 +172,6 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
     }
   }
 
-  // 🔥 NEW: Toggle Multi-Selection
   void _toggleSelection(String docId) {
     setState(() {
       if (_selectedSecretDocs.contains(docId)) {
@@ -187,7 +182,6 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
     });
   }
 
-  // 🔥 NEW: Delete selected files permanently
   Future<void> _deleteSelectedSecretFiles() async {
     if (_selectedSecretDocs.isEmpty) return;
 
@@ -222,6 +216,92 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
           backgroundColor: Colors.redAccent, behavior: SnackBarBehavior.floating
         ));
       }
+    }
+  }
+
+  // 🔥 NEW: Show the "Move To" Bottom Sheet
+  Future<void> _showMoveMenu() async {
+    if (_selectedSecretDocs.isEmpty) return;
+
+    // Grab all available folders from Firebase
+    final folderSnapshot = await FirebaseFirestore.instance.collection('vault_folders').orderBy('createdAt').get();
+    final folders = folderSnapshot.docs;
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFFF5F7FA),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 10),
+              Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10))),
+              const SizedBox(height: 20),
+              const Text("MOVE ASSETS TO:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87, fontSize: 16, letterSpacing: 1.2)),
+              const SizedBox(height: 10),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      // Option to move BACK to Unsorted (Only show if we aren't already in Unsorted)
+                      if (_activeFolderId != 'unsorted')
+                        ListTile(
+                          leading: const Icon(Icons.all_inbox, color: Colors.lightBlue),
+                          title: const Text("Unsorted Secrets", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
+                          onTap: () => _executeMove(null), // null = unsorted
+                        ),
+                      
+                      // List all the other custom folders
+                      ...folders.where((f) => f.id != _activeFolderId).map((folder) {
+                        return ListTile(
+                          leading: const Icon(Icons.folder, color: Colors.lightBlue),
+                          title: Text(folder['name'], style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
+                          onTap: () => _executeMove(folder.id),
+                        );
+                      }).toList(),
+                      
+                      if (folders.isEmpty && _activeFolderId == 'unsorted')
+                        const Padding(
+                          padding: EdgeInsets.all(20.0),
+                          child: Text("No other folders available. Create one first!", style: TextStyle(color: Colors.black54)),
+                        )
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      }
+    );
+  }
+
+  // 🔥 NEW: Execute the batch move
+  Future<void> _executeMove(String? targetFolderId) async {
+    Navigator.pop(context); // Close the bottom sheet menu
+    
+    final batch = FirebaseFirestore.instance.batch();
+    for (String docId in _selectedSecretDocs) {
+      batch.update(
+        FirebaseFirestore.instance.collection('vault_files').doc(docId),
+        {'folderId': targetFolderId}
+      );
+    }
+    
+    await batch.commit();
+
+    if (mounted) {
+      setState(() => _selectedSecretDocs.clear());
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text("Assets relocated successfully."),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating
+      ));
     }
   }
 
@@ -272,7 +352,6 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
         String extension = result.files.single.extension ?? originalName.split('.').last.toLowerCase();
         int fileSize = result.files.single.size; 
 
-        // 🔥 RITANKAR'S MASTER PORTAL
         await VaultService().uploadFile(
           name: originalName,
           path: filePath,
@@ -316,7 +395,6 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA), 
-      // 🔥 DYNAMIC APP BAR: Turns into a selection menu if files are selected!
       appBar: _isUnlocked && isSelectionMode
         ? AppBar(
             backgroundColor: const Color(0xFFF5F7FA),
@@ -327,6 +405,12 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
             ),
             title: Text("${_selectedSecretDocs.length} Selected", style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
             actions: [
+              // 🔥 NEW: The Move Button in the AppBar
+              IconButton(
+                icon: const Icon(Icons.drive_file_move, color: Colors.lightBlue, size: 26),
+                onPressed: _showMoveMenu,
+                tooltip: 'Relocate Selected',
+              ),
               IconButton(
                 icon: const Icon(Icons.delete_forever, color: Colors.redAccent, size: 28),
                 onPressed: _deleteSelectedSecretFiles,
@@ -341,7 +425,7 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
                   onPressed: () => setState(() { 
                     _activeFolderId = null; 
                     _activeFolderName = null; 
-                    _selectedSecretDocs.clear(); // Clear selections when leaving folder!
+                    _selectedSecretDocs.clear(); 
                   }),
                 ) 
               : null,
@@ -374,7 +458,6 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
               ? (_activeFolderId == null ? _buildFolderList() : _buildVaultFiles()) 
               : (_authMethod == 'Biometrics' ? _buildBiometricLock() : _buildPinLockScreen()),
               
-      // Hides the floating action button when you are trying to select/delete files
       floatingActionButton: _isUnlocked && !isSelectionMode ? FloatingActionButton.extended(
         onPressed: _activeFolderId == null ? _createNewFolder : _addFileDirectlyToSecretVault,
         backgroundColor: Colors.lightBlue,
@@ -478,8 +561,6 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         leading: Icon(icon, color: Colors.lightBlue, size: 30),
         title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
-        
-        // 🔥 NEW: Trash Can for Custom Folders, Chevron for Unsorted
         trailing: id == 'unsorted' 
           ? const Icon(Icons.chevron_right, color: Colors.black26)
           : IconButton(
@@ -528,7 +609,6 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
             
             return Dismissible(
               key: Key(docId),
-              // Disables swipe-to-restore if you are currently trying to multi-select
               direction: isSelectionMode ? DismissDirection.none : DismissDirection.startToEnd, 
               onDismissed: (direction) => _removeSecret(docId, file['name'] ?? 'Classified File'),
               background: Container(
@@ -542,23 +622,16 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
-                  
-                  // 🔥 Highlights the item in blue if it is selected!
                   border: isSelected ? Border.all(color: Colors.lightBlue, width: 2) : null,
                   color: isSelected ? Colors.lightBlue.withOpacity(0.1) : null,
-                  
                   gradient: isSelected ? null : LinearGradient(begin: Alignment.centerLeft, end: Alignment.centerRight, colors: [Colors.white.withOpacity(0.9), Colors.lightBlue.shade50]),
                   boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 4))],
                 ),
                 child: ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                  
-                  // 🔥 Long Press selects the item!
                   onLongPress: () {
                     if (!isSelectionMode) _toggleSelection(docId);
                   },
-                  
-                  // 🔥 Tapping toggles selection (if mode is active), otherwise it opens the file
                   onTap: () {
                     if (isSelectionMode) {
                       _toggleSelection(docId);
@@ -566,7 +639,6 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
                       _openSecretFile(file);
                     }
                   }, 
-                  
                   leading: isSelected 
                     ? const Icon(Icons.check_circle, color: Colors.lightBlue, size: 28)
                     : CircleAvatar(backgroundColor: Colors.lightBlue.shade100, child: const Icon(Icons.lock, color: Colors.blueAccent, size: 20)),

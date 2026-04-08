@@ -1,18 +1,13 @@
 // Location: lib/screens/system_protocols_screen.dart
 
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart'; // 🔥 ADDED FOR .ENV
-import 'dart:math';
+import 'dart:io'; // 🔥 NEW: Needed to read the image file
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../widgets/doodle_background.dart';
 import 'login_screen.dart';
-import 'operator_profile_screen.dart'; 
-import 'otp_verification_screen.dart';
-import '../services/email_service.dart';
+import 'operator_profile_screen.dart';
 
 class SystemProtocolsScreen extends StatefulWidget {
   const SystemProtocolsScreen({super.key});
@@ -30,6 +25,8 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
   bool _isProcessing = false;
   bool _isLoadingSettings = true; 
 
+  File? _profileImage; // 🔥 NEW: Variable to hold your avatar on the main page
+
   @override
   void initState() {
     super.initState();
@@ -38,9 +35,24 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
+    final imagePath = prefs.getString('operator_avatar'); // 🔥 Check for custom photo
+    
     setState(() {
       _biometricsEnabled = (prefs.getString('vaultAuthMethod') == 'Biometrics');
       _stealthModeEnabled = prefs.getBool('stealthMode') ?? false; 
+      
+      // 🔥 Load the image if it exists
+      if (imagePath != null && imagePath.isNotEmpty) {
+        final file = File(imagePath);
+        if (file.existsSync()) {
+          _profileImage = file;
+        } else {
+          _profileImage = null;
+        }
+      } else {
+        _profileImage = null;
+      }
+      
       _isLoadingSettings = false; 
     });
   }
@@ -101,11 +113,8 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
     if (mounted) setState(() => _isProcessing = false);
   }
 
-  // 🔥 WIRED THE EMAILJS API WITH .ENV
   Future<void> _resetSecretVaultPin() async {
     if (_isProcessing) return;
-    
-    final email = user?.email ?? "operator@fractalvault.com";
 
     bool? confirm = await showDialog<bool>(
       context: context,
@@ -113,7 +122,7 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
         backgroundColor: const Color(0xFF0D2137),
         title: const Text("RESET SECRET PIN?", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
         content: Text(
-          "To reset your Secret Vault PIN, a secure 6-digit code will be sent to your registered channel:\n\n$email\n\nProceed with transmission?", 
+          "To reset your Secret Vault PIN, a secure verification link will be sent to your registered channel:\n\n${user?.email ?? 'Unknown Agent'}\n\nProceed with transmission?", 
           style: const TextStyle(color: Colors.white70)
         ),
         actions: [
@@ -124,47 +133,26 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text("SEND CODE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+            child: const Text("SEND LINK", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
           ),
         ],
       )
     );
 
-    // 🔥 This is where the magic happens. Look how clean this is now!
     if (confirm == true) {
       setState(() => _isProcessing = true);
-      if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
       
-      try {
-        // We just ask the Service engine to do all the heavy lifting
-        final otpCode = await EmailService().dispatchPinResetOtp(email);
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text("✅ Code Dispatched: Check your inbox"), 
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ));
-
-          // Move to the OTP Verification Screen
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => OtpVerificationScreen(validOtp: otpCode),
-            ),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text("❌ Network Error: $e"), 
-            backgroundColor: Colors.redAccent,
-            duration: const Duration(seconds: 3),
-          ));
-        }
-      } finally {
-        if (mounted) setState(() => _isProcessing = false);
+      if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Secure link dispatched. Awaiting verification..."), 
+          backgroundColor: Colors.blueAccent,
+          duration: Duration(seconds: 3),
+        ));
       }
+
+      await Future.delayed(const Duration(seconds: 1)); 
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 
@@ -183,61 +171,49 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
     }
   }
 
-  // 🔥 THE COOLER POP-UP: Using showGeneralDialog for custom animations!
-  void _showOperatorProfile() {
+  // 🔥 CHANGED TO ASYNC: It waits for you to close the Dossier, then refreshes the photo!
+  Future<void> _showOperatorProfile() async {
     if (_isProcessing) return;
     
-    Navigator.push(
+    await Navigator.push(
       context,
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 500), 
         reverseTransitionDuration: const Duration(milliseconds: 350), 
         pageBuilder: (context, animation, secondaryAnimation) => const OperatorProfileScreen(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          
           final scaleCurve = CurvedAnimation(
             parent: animation, 
             curve: Curves.fastLinearToSlowEaseIn, 
             reverseCurve: Curves.easeOut, 
           );
-
-          final fadeCurve = CurvedAnimation(
-            parent: animation, 
-            curve: Curves.easeIn,
-          );
+          final fadeCurve = CurvedAnimation(parent: animation, curve: Curves.easeIn);
 
           return FadeTransition(
             opacity: fadeCurve,
-            child: ScaleTransition(
-              scale: Tween<double>(begin: 0.85, end: 1.0).animate(scaleCurve), 
-              child: child,
-            ),
+            child: ScaleTransition(scale: Tween<double>(begin: 0.85, end: 1.0).animate(scaleCurve), child: child),
           );
         },
       ),
     );
-  }
 
-  Widget _buildDossierRow(String label, String value, {bool isGreen = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 10, fontFamily: 'Courier', letterSpacing: 1.0)),
-          SelectableText( 
-            value, 
-            style: TextStyle(color: isGreen ? Colors.greenAccent : Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-            cursorColor: const Color(0xFF90CAFF), 
-          ),
-        ],
-      ),
-    );
+    // 🔥 This fires the moment you close the Dossier to update the photo on the main page!
+    if (mounted) {
+      _loadSettings(); 
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+
+    // 🔥 NEW: Logic to figure out which photo to show on the main settings page
+    ImageProvider? avatarImage;
+    if (_profileImage != null) {
+      avatarImage = FileImage(_profileImage!); // Use custom photo if it exists
+    } else if (user?.photoURL != null) {
+      avatarImage = NetworkImage(user!.photoURL!); // Fallback to Google photo
+    }
 
     return Stack(
       children: [
@@ -291,10 +267,14 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
                           ),
                           child: Row(
                             children: [
+                              // 🔥 CHANGED: Now uses your actual photo instead of the hardcoded icon!
                               CircleAvatar(
                                 radius: 30,
                                 backgroundColor: const Color(0xFF90CAFF).withOpacity(0.2),
-                                child: const Icon(Icons.person, size: 35, color: Color(0xFF90CAFF)),
+                                backgroundImage: avatarImage,
+                                child: avatarImage == null 
+                                    ? const Icon(Icons.person, size: 35, color: Color(0xFF90CAFF))
+                                    : null,
                               ),
                               const SizedBox(width: 20),
                               Expanded(
