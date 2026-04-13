@@ -1,13 +1,17 @@
+// Location: lib/services/cloud_dispatcher.dart
+
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:convert';
-import 'package:crypto/crypto.dart'; // 🔥 For Cloudinary Signatures
+import 'package:crypto/crypto.dart'; 
 import 'local_node_manager.dart';
+
 class CloudDispatcher {
   
   // ==========================================
-  // 🛡️ PULLING SECRETS FROM .ENV (FORTRESS MODE)
+  // 🛡️ PULLING SECRETS FROM .ENV 
   // ==========================================
   final String _supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
   final String _supabaseSecretKey = dotenv.env['SUPABASE_SERVICE_ROLE'] ?? '';
@@ -18,211 +22,126 @@ class CloudDispatcher {
   final String _appwriteKey = dotenv.env['APPWRITE_API_KEY'] ?? '';
   final String _appwriteBucket = dotenv.env['APPWRITE_BUCKET_ID'] ?? ''; 
 
-
-  // =========================================================================
-  // 🚀 NODE 1 UPLOAD LOGIC (SUPABASE)
-  // =========================================================================
-  Future<bool> uploadToSupabase({required String fileId, required Uint8List shardBytes}) async {
-    print("========================================");
-    print("🚀 DISPATCHING SHARD 1 TO SUPABASE...");
-
-    final String apiUrl = "$_supabaseUrl/storage/v1/object/$_supabaseBucket/$fileId-shard1.bin";
-
-    try {
-      final response = await http.post(
-        Uri.parse(apiUrl),
-        headers: {
-          "Authorization": "Bearer $_supabaseSecretKey",
-          "Content-Type": "application/octet-stream", 
-        },
-        body: shardBytes,
-      );
-
-      if (response.statusCode == 200) {
-        print("✅ NODE 1 (SUPABASE): UPLOAD SUCCESSFUL!");
-        print("========================================");
-        return true;
-      } else {
-        print("❌ NODE 1 FAILED: ${response.statusCode}");
-        print("Reason: ${response.body}");
-        return false;
-      }
-    } catch (e) {
-      print("❌ NODE 1 NETWORK ERROR: $e");
-      return false;
-    }
-  }
-
-  // =========================================================================
-  // 🚀 NODE 2 UPLOAD LOGIC (APPWRITE)
-  // =========================================================================
-  Future<bool> uploadToAppwrite({required String fileId, required Uint8List shardBytes}) async {
-    print("========================================");
-    print("🚀 DISPATCHING SHARD 2 TO APPWRITE...");
-
-    final String apiUrl = "$_appwriteEndpoint/storage/buckets/$_appwriteBucket/files";
-
-    try {
-      var request = http.MultipartRequest('POST', Uri.parse(apiUrl));
-      
-      request.headers.addAll({
-        'X-Appwrite-Project': _appwriteProject,
-        'X-Appwrite-Key': _appwriteKey,
-      });
-
-      // Appwrite file IDs must be max 36 chars and only contain valid characters
-      String cleanId = "${fileId}s2".replaceAll(RegExp(r'[^a-zA-Z0-9.-]'), '');
-      request.fields['fileId'] = cleanId;
-
-      var multipartFile = http.MultipartFile.fromBytes(
-        'file', 
-        shardBytes, 
-        filename: '$cleanId.bin'
-      );
-      request.files.add(multipartFile);
-
-      var response = await request.send();
-
-      if (response.statusCode == 201) { 
-        print("✅ NODE 2 (APPWRITE): UPLOAD SUCCESSFUL!");
-        print("========================================");
-        return true;
-      } else {
-        var responseData = await response.stream.bytesToString();
-        print("❌ NODE 2 FAILED: ${response.statusCode}");
-        print("Reason: $responseData");
-        return false;
-      }
-    } catch (e) {
-      print("❌ NODE 2 NETWORK ERROR: $e");
-      return false;
-    }
-  }
-  // ==========================================
-  // 🛡️ NODE 3 & 4 SECRETS (From .env)
-  // ==========================================
   final String _cloudinaryCloudName = dotenv.env['CLOUDINARY_CLOUD_NAME'] ?? '';
   final String _cloudinaryApiKey = dotenv.env['CLOUDINARY_API_KEY'] ?? '';
   final String _cloudinaryApiSecret = dotenv.env['CLOUDINARY_API_SECRET'] ?? '';
-  
   final String _imageKitPrivateKey = dotenv.env['IMAGEKIT_PRIVATE_KEY'] ?? '';
 
   // =========================================================================
-  // 🚀 NODE 3 UPLOAD LOGIC (CLOUDINARY - THE .TXT OVERRIDE)
+  // 🚀 NODE 1: SUPABASE (File + Shard 0)
   // =========================================================================
-  Future<bool> uploadToCloudinary({required String fileId, required Uint8List shardBytes}) async {
-    print("========================================");
-    print("🚀 DISPATCHING SHARD 3 TO CLOUDINARY (SIGNED)...");
+  Future<bool> uploadToSupabase({required String fileId, required Uint8List fileBytes, required String keyShard}) async {
+    final String fileUrl = "$_supabaseUrl/storage/v1/object/$_supabaseBucket/$fileId.bin";
+    final String shardUrl = "$_supabaseUrl/storage/v1/object/$_supabaseBucket/$fileId-key.txt";
 
+    try {
+      // 1. Upload the Heavy File
+      await http.post(Uri.parse(fileUrl), headers: {"Authorization": "Bearer $_supabaseSecretKey", "Content-Type": "application/octet-stream"}, body: fileBytes);
+      
+      // 2. Upload the Tiny Key Shard
+      final shardRes = await http.post(Uri.parse(shardUrl), headers: {"Authorization": "Bearer $_supabaseSecretKey", "Content-Type": "text/plain"}, body: keyShard);
+
+      return shardRes.statusCode == 200;
+    } catch (e) { return false; }
+  }
+
+  // =========================================================================
+  // 🚀 NODE 2: APPWRITE (File + Shard 1)
+  // =========================================================================
+  Future<bool> uploadToAppwrite({required String fileId, required Uint8List fileBytes, required String keyShard}) async {
+    final String apiUrl = "$_appwriteEndpoint/storage/buckets/$_appwriteBucket/files";
+
+    try {
+      // Helper for Multipart
+      Future<int> sendPart(String id, List<int> bytes, String name) async {
+        var req = http.MultipartRequest('POST', Uri.parse(apiUrl));
+        req.headers.addAll({'X-Appwrite-Project': _appwriteProject, 'X-Appwrite-Key': _appwriteKey});
+        req.fields['fileId'] = id;
+        req.files.add(http.MultipartFile.fromBytes('file', bytes, filename: name));
+        var res = await req.send();
+        return res.statusCode;
+      }
+
+      // Upload both
+      await sendPart("${fileId}f", fileBytes, "$fileId.bin");
+      final shardStatus = await sendPart("${fileId}k", utf8.encode(keyShard), "$fileId-key.txt");
+
+      return shardStatus == 201;
+    } catch (e) { return false; }
+  }
+
+  // =========================================================================
+  // 🚀 NODE 3: CLOUDINARY (File + Shard 2)
+  // =========================================================================
+  Future<bool> uploadToCloudinary({required String fileId, required Uint8List fileBytes, required String keyShard}) async {
     final String apiUrl = "https://api.cloudinary.com/v1_1/$_cloudinaryCloudName/raw/upload";
     
-    int timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    String cleanId = "${fileId}s3".replaceAll(RegExp(r'[^a-zA-Z0-9.-]'), '');
-    
-    // 🔥 THE FIX: We permanently attach .txt to the ID *before* we sign it
-    String publicIdWithExt = "$cleanId.txt"; 
-
-    // Build the string to sign (Parameters must be in alphabetical order!)
-    String stringToSign = "public_id=$publicIdWithExt&timestamp=$timestamp$_cloudinaryApiSecret";
-    String signature = sha1.convert(utf8.encode(stringToSign)).toString();
-
-    try {
-      var request = http.MultipartRequest('POST', Uri.parse(apiUrl));
-      
-      request.fields['api_key'] = _cloudinaryApiKey;
-      request.fields['timestamp'] = timestamp.toString();
-      request.fields['signature'] = signature;
-      request.fields['public_id'] = publicIdWithExt; // Send the new ID
-
-      var multipartFile = http.MultipartFile.fromBytes(
-        'file', 
-        shardBytes, 
-        filename: publicIdWithExt // Match the filename
-      );
-      request.files.add(multipartFile);
-
-      var response = await request.send();
-
-      if (response.statusCode == 200) { 
-        print("✅ NODE 3 (CLOUDINARY): UPLOAD SUCCESSFUL!");
-        print("========================================");
-        return true;
-      } else {
-        var responseData = await response.stream.bytesToString();
-        print("❌ NODE 3 FAILED: ${response.statusCode} | $responseData");
-        return false;
-      }
-    } catch (e) {
-      print("❌ NODE 3 NETWORK ERROR: $e");
-      return false;
+    Future<int> sendCloudinary(String publicId, List<int> bytes) async {
+      int ts = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      String sig = sha1.convert(utf8.encode("public_id=$publicId&timestamp=$ts$_cloudinaryApiSecret")).toString();
+      var req = http.MultipartRequest('POST', Uri.parse(apiUrl));
+      req.fields.addAll({'api_key': _cloudinaryApiKey, 'timestamp': ts.toString(), 'signature': sig, 'public_id': publicId});
+      req.files.add(http.MultipartFile.fromBytes('file', bytes, filename: publicId));
+      var res = await req.send();
+      return res.statusCode;
     }
+
+    await sendCloudinary("$fileId.bin", fileBytes);
+    final shardStatus = await sendCloudinary("$fileId-key.txt", utf8.encode(keyShard));
+
+    return shardStatus == 200;
   }
 
   // =========================================================================
-  // 🚀 NODE 4 UPLOAD LOGIC (IMAGEKIT - BASIC AUTH)
+  // 🚀 NODE 4: IMAGEKIT (File + Shard 3)
   // =========================================================================
-  Future<bool> uploadToImageKit({required String fileId, required Uint8List shardBytes}) async {
-    print("========================================");
-    print("🚀 DISPATCHING SHARD 4 TO IMAGEKIT...");
-
+  Future<bool> uploadToImageKit({required String fileId, required Uint8List fileBytes, required String keyShard}) async {
     final String apiUrl = "https://upload.imagekit.io/api/v1/files/upload";
-    
-    // ImageKit requires Basic Auth using the Private Key encoded in Base64
-    String basicAuth = 'Basic ${base64Encode(utf8.encode('$_imageKitPrivateKey:'))}';
-    String cleanId = "${fileId}s4".replaceAll(RegExp(r'[^a-zA-Z0-9.-]'), '');
+    String auth = 'Basic ${base64Encode(utf8.encode('$_imageKitPrivateKey:'))}';
 
-    try {
-      var request = http.MultipartRequest('POST', Uri.parse(apiUrl));
-      request.headers.addAll({'Authorization': basicAuth});
-
-      request.fields['fileName'] = '$cleanId.bin';
-      request.fields['useUniqueFileName'] = 'false'; 
-
-      var multipartFile = http.MultipartFile.fromBytes('file', shardBytes, filename: '$cleanId.txt');
-      request.files.add(multipartFile);
-
-      var response = await request.send();
-
-      if (response.statusCode == 200) { 
-        print("✅ NODE 4 (IMAGEKIT): UPLOAD SUCCESSFUL!");
-        print("========================================");
-        return true;
-      } else {
-        var responseData = await response.stream.bytesToString();
-        print("❌ NODE 4 FAILED: ${response.statusCode} | $responseData");
-        return false;
-      }
-    } catch (e) {
-      print("❌ NODE 4 NETWORK ERROR: $e");
-      return false;
+    Future<int> sendImageKit(String name, List<int> bytes) async {
+      var req = http.MultipartRequest('POST', Uri.parse(apiUrl));
+      req.headers.addAll({'Authorization': auth});
+      req.fields.addAll({'fileName': name, 'useUniqueFileName': 'false'});
+      req.files.add(http.MultipartFile.fromBytes('file', bytes, filename: name));
+      var res = await req.send();
+      return res.statusCode;
     }
+
+    await sendImageKit("$fileId.bin", fileBytes);
+    final shardStatus = await sendImageKit("$fileId-key.txt", utf8.encode(keyShard));
+
+    return shardStatus == 200;
   }
-  /// 🔥 THE MASTER SCATTER PROTOCOL
+
+  // =========================================================================
+  // 🛰️ THE MASTER SCATTER PROTOCOL (The Brain)
+  // =========================================================================
   Future<Map<String, String>> disperseToNodes({
     required String fileId, 
     required Uint8List bytes, 
-    required String extension
+    required String extension,
+    required List<String> shards, 
   }) async {
-    print("🛰️ INITIALIZING MULTI-NODE DISPERSION...");
+    print("🛰️ INITIALIZING DECENTRALIZED DISPERSION...");
 
-    // 1. Trigger the 4 Cloud Nodes simultaneously (These all return Bools)
+    // Dispatching "Combo Meals" to all nodes simultaneously
     final results = await Future.wait([
-      uploadToSupabase(fileId: fileId, shardBytes: bytes),
-      uploadToAppwrite(fileId: fileId, shardBytes: bytes),
-      uploadToCloudinary(fileId: fileId, shardBytes: bytes),
-      uploadToImageKit(fileId: fileId, shardBytes: bytes),
+      uploadToSupabase(fileId: fileId, fileBytes: bytes, keyShard: shards[0]),
+      uploadToAppwrite(fileId: fileId, fileBytes: bytes, keyShard: shards[1]),
+      uploadToCloudinary(fileId: fileId, fileBytes: bytes, keyShard: shards[2]),
+      uploadToImageKit(fileId: fileId, fileBytes: bytes, keyShard: shards[3]),
     ]);
 
-    // 2. Trigger the Local Node safely on its own
+    // Node 5: Local Storage 
     bool localStatus = false;
     try {
       await LocalNodeManager().securePhysicalKey(fileId: fileId, shardBytes: bytes);
+      // We also store the 5th shard locally
+      await LocalNodeManager().storeLocalShard(fileId, shards[4]); 
       localStatus = true;
-    } catch (e) {
-      print("❌ NODE 5 (LOCAL) FAILED: $e");
-    }
+    } catch (e) { print("❌ NODE 5 FAILED: $e"); }
 
-    // Return the final network map
     return {
       'supabase': results[0] ? "active" : "failed",
       'appwrite': results[1] ? "active" : "failed",
@@ -233,33 +152,65 @@ class CloudDispatcher {
   }
 
   // =========================================================================
-  // 📥 DOWNLOAD LOGIC (Fetching from Supabase as Primary Node)
+  // 📥 DOWNLOADER: Reconstructing from Fragments
   // =========================================================================
-  Future<Uint8List?> downloadFromSupabase(String fileId) async {
-    print("========================================");
-    print("📥 INITIATING DOWNLOAD FROM NODE 1...");
-
-    // Matches the exact filename convention we used in uploadToSupabase
-    final String apiUrl = "$_supabaseUrl/storage/v1/object/$_supabaseBucket/$fileId-shard1.bin";
-
+  
+  // 1. Fetch the Encrypted File (Burger)
+  Future<Uint8List?> downloadEncryptedFile(String fileId) async {
+    final String url = "$_supabaseUrl/storage/v1/object/$_supabaseBucket/$fileId.bin";
     try {
-      final response = await http.get(
-        Uri.parse(apiUrl),
-        headers: {
-          "Authorization": "Bearer $_supabaseSecretKey",
-        },
-      );
+      final res = await http.get(Uri.parse(url), headers: {"Authorization": "Bearer $_supabaseSecretKey"});
+      return res.statusCode == 200 ? res.bodyBytes : null;
+    } catch (e) { return null; }
+  }
 
-      if (response.statusCode == 200) {
-        print("✅ DOWNLOAD COMPLETE: ${response.bodyBytes.length} bytes secured.");
-        return response.bodyBytes;
-      } else {
-        print("❌ DOWNLOAD FAILED: ${response.statusCode}");
-        return null;
-      }
-    } catch (e) {
-      print("❌ NETWORK ERROR DURING DOWNLOAD: $e");
-      return null;
-    }
+  // 🍟 SHARD 0: Fetch from Supabase
+  Future<String?> downloadShardFromSupabase(String fileId) async {
+    final String url = "$_supabaseUrl/storage/v1/object/$_supabaseBucket/$fileId-key.txt";
+    try {
+      final res = await http.get(Uri.parse(url), headers: {"Authorization": "Bearer $_supabaseSecretKey"});
+      return res.statusCode == 200 ? res.body : null;
+    } catch (e) { return null; }
+  }
+
+  // 🍟 SHARD 1: Fetch from Appwrite
+  Future<String?> downloadShardFromAppwrite(String fileId) async {
+    final String fileIdKey = "${fileId}k".replaceAll(RegExp(r'[^a-zA-Z0-9.-]'), '');
+    final String url = "$_appwriteEndpoint/storage/buckets/$_appwriteBucket/files/$fileIdKey/view";
+    try {
+      final res = await http.get(Uri.parse(url), headers: {
+        'X-Appwrite-Project': _appwriteProject,
+        'X-Appwrite-Key': _appwriteKey,
+      });
+      return res.statusCode == 200 ? res.body : null;
+    } catch (e) { return null; }
+  }
+
+  // 🍟 SHARD 2: Fetch from Cloudinary
+  Future<String?> downloadShardFromCloudinary(String fileId) async {
+    final String cleanId = "${fileId}s3".replaceAll(RegExp(r'[^a-zA-Z0-9.-]'), '');
+    final String url = "https://res.cloudinary.com/$_cloudinaryCloudName/raw/upload/v1/$cleanId.txt";
+    try {
+      final res = await http.get(Uri.parse(url));
+      return res.statusCode == 200 ? res.body : null;
+    } catch (e) { return null; }
+  }
+
+  // 🍟 SHARD 3: Fetch from ImageKit
+  Future<String?> downloadShardFromImageKit(String fileId) async {
+    final String cleanId = "${fileId}s4".replaceAll(RegExp(r'[^a-zA-Z0-9.-]'), '');
+    // Note: Assuming standard ImageKit endpoint. Update if you have a custom domain.
+    final String url = "https://ik.imagekit.io/$_cloudinaryCloudName/$cleanId.txt"; 
+    try {
+      final res = await http.get(Uri.parse(url));
+      return res.statusCode == 200 ? res.body : null;
+    } catch (e) { return null; }
+  }
+
+  // 🍟 SHARD 4: Fetch from Local Hardware
+  Future<String?> downloadShardFromLocal(String fileId) async {
+    try {
+      return await LocalNodeManager().getLocalShard(fileId);
+    } catch (e) { return null; }
   }
 }

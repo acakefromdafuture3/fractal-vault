@@ -28,28 +28,49 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _currentNavIndex = 0; 
-  bool _isProcessing = false; // 🔥 Renamed to clarify it just locks the buttons now, no tiny spinner!
+  bool _isProcessing = false; 
 
+  // 🔥 UPGRADED: The Decentralized Scavenger Hunt 
   Future<void> _viewSecureFile(Map<String, dynamic> fileData) async {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Fetching shards and decrypting..."), duration: Duration(seconds: 2))
+      const SnackBar(content: Text("Scavenging shards and decrypting..."), duration: Duration(seconds: 2))
     );
 
     try {
       final String fileId = fileData['docId'];
-      final List<String> shards = List<String>.from(fileData['shards']);
       final String ivBase64 = fileData['iv'];
       final String extension = fileData['extension'];
 
       final cloud = CloudDispatcher();
-      Uint8List? encryptedBytes = await cloud.downloadFromSupabase(fileId);
-
+      
+      // 1. Download the Heavy File (The Burger)
+      Uint8List? encryptedBytes = await cloud.downloadEncryptedFile(fileId);
       if (encryptedBytes == null) throw Exception("Node 1 unreachable.");
 
+     // 2. THE SCAVENGER HUNT (Now checking 4 places!)
+      final results = await Future.wait([
+        cloud.downloadShardFromSupabase(fileId),
+        cloud.downloadShardFromAppwrite(fileId),
+        cloud.downloadShardFromCloudinary(fileId),
+        cloud.downloadShardFromLocal(fileId), // 🔥 ADD THIS LINE!
+      ]);
+
+      // Filter out any failed network requests
+      final List<String> gatheredShards = results.whereType<String>().toList();
+
+      // Print this so we can see exactly how many we found
+      print("DEBUG: Scavenger hunt found ${gatheredShards.length} shards!"); 
+
+      if (gatheredShards.length < 3) {
+        throw Exception("Quorum Failed: Need 3 shards, found ${gatheredShards.length}.");
+      }
+
+      // 3. Rebuild Key & Decrypt
       final crypto = EncryptionService();
-      String recoveredKey = crypto.rebuildAesKey(shards);
+      String recoveredKey = crypto.rebuildAesKey(gatheredShards);
       Uint8List plainBytes = crypto.decryptHeavyFile(encryptedBytes, recoveredKey, ivBase64);
 
+      // 4. Save and Open
       final tempDir = await getTemporaryDirectory();
       final tempFile = File('${tempDir.path}/view_$fileId.$extension');
       await tempFile.writeAsBytes(plainBytes);
@@ -122,18 +143,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       setState(() => _isProcessing = true);
 
-      // 🔥 1. SHOW THE ANIMATION FIRST
       showDialog(
         context: context,
         barrierDismissible: false, 
         builder: (context) => const ShardingAnimationDialog(),
       );
 
-      // 🔥 2. THE MAGIC FIX: Give Flutter exactly 600 milliseconds to draw the animation
-      // before we lock up the CPU with heavy encryption math!
       await Future.delayed(const Duration(milliseconds: 600));
 
-      // 3. Now we can safely do the heavy lifting in the background
       for (var file in result.files) {
         if (file.path == null) continue; 
         
@@ -148,24 +165,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final encryptedData = engine.encryptHeavyFile(fileBytes, aesKey);
         final keyShards = engine.shredAesKey(aesKey);
 
+        // 🔥 THE COMBO MEAL: Dispatching the Heavy File and the 5 Shards
         await VaultService().uploadEncryptedFile(
           name: fileName,
           extension: extension,
           encryptedBytes: encryptedData['encryptedBytes'],
           iv: encryptedData['iv'],
-          shards: keyShards,
+          shards: keyShards, 
         );
       }
 
       if (mounted) {
-        Navigator.pop(context); // Close the animation dialog
+        Navigator.pop(context); 
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text("${result.files.length} File(s) Secured & Shattered!"), 
           backgroundColor: Colors.green
         ));
       }
     } catch (e) {
-      if (mounted) Navigator.pop(context); // Make sure to close the dialog if an error happens
+      if (mounted) Navigator.pop(context); 
       debugPrint("Error: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -199,7 +217,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         shape: const CircleBorder(), 
         elevation: 2,
         backgroundColor: _isProcessing ? Colors.grey : const Color(0xFF90CAFF), 
-        // 🔥 REMOVED THE SPINNER: Now it just stays a static icon, letting the main screen animation do the talking!
         child: const Icon(Icons.add, size: 32, color: Color(0xFF0D2137)), 
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
@@ -207,7 +224,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       bottomNavigationBar: BottomAppBar(
         color: const Color(0xFF0D2137), 
         surfaceTintColor: Colors.transparent, 
-        clipBehavior: Clip.antiAlias,         
+        clipBehavior: Clip.antiAlias,        
         shape: const CircularNotchedRectangle(), 
         notchMargin: 8,
         child: SizedBox(
@@ -252,10 +269,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 } 
-
-// =====================================================================
-// 🔥 THE PURE SHARDING ANIMATION (CINEMATIC SLOW-MOTION)
-// =====================================================================
 
 class ShardingAnimationDialog extends StatefulWidget {
   const ShardingAnimationDialog({super.key});
@@ -317,7 +330,6 @@ class _ShardingAnimationDialogState extends State<ShardingAnimationDialog> with 
           mainAxisSize: MainAxisSize.min,
           children: [
             
-            // 🔥 THE EXPLODING FILE ANIMATION
             SizedBox(
               height: 100,
               width: 100,

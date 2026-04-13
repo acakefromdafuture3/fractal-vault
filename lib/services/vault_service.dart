@@ -9,14 +9,17 @@ class VaultService {
 
   /// 🔥 THE ENCRYPTED MULTI-NODE PORTAL
   /// 🔥 THE ENCRYPTED MULTI-NODE PORTAL
+  // Location: lib/services/vault_service.dart
+
+  /// 🔥 THE ENCRYPTED MULTI-NODE PORTAL (Upgraded to Decentralized)
   Future<void> uploadEncryptedFile({
     required String name,
     required String extension,
     required Uint8List encryptedBytes,
     required String iv,
-    required List<String> shards,
+    required List<String> shards, // These 5 shards will now be scattered
     String? folderId,
-    bool isSecret = false, // 🔥 NEW: The Routing Switch (Defaults to false)
+    bool isSecret = false, 
   }) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception("No authenticated operator found.");
@@ -24,22 +27,24 @@ class VaultService {
     final String fileId = DateTime.now().millisecondsSinceEpoch.toString();
     String cleanType = _normalizeCategory(extension);
 
+    // 🔥 UPGRADE: We now pass the 'shards' to the cloud nodes instead of Firestore
     final Map<String, String> nodeLinks = await _cloud.disperseToNodes(
       fileId: fileId,
       bytes: encryptedBytes,
       extension: extension,
+      shards: shards, // 🚀 Dispatching the shards!
     );
 
-    // SECURE THE METADATA & SHARDS IN FIRESTORE
+    // SECURE THE METADATA IN FIRESTORE (Keys are now GONE from here)
     await _db.collection('vault_files').doc(fileId).set({
-      'ownerId': user.uid, // 🔒 Links the file strictly to the logged-in user
+      'ownerId': user.uid, 
       'name': name,
       'type': cleanType,
       'extension': extension,
       'iv': iv,             
-      'shards': shards,     
+      // 'shards': shards, ❌ REMOVED: Firestore no longer sees the key!
       'nodeLinks': nodeLinks, 
-      'isSecret': isSecret, // 🔥 NEW: Uses the switch to route the file!
+      'isSecret': isSecret, 
       'folderId': folderId,
       'dateAdded': FieldValue.serverTimestamp(),
       'status': 'Shattered', 
