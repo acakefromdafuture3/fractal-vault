@@ -66,66 +66,70 @@ class _CategoryScreenState extends State<CategoryScreen> {
   }
 
   // 🔥 UPGRADED: The true Reconstruction Engine is now here!
+  // 🔥 UPGRADED: Now with Decentralized Scavenger Hunt logic
   Future<void> _openVaultFile(Map<String, dynamic> fileData) async {
     final String fileName = fileData['name'] ?? "Unknown";
+    final String fileId = fileData['docId'];
+    final String ivBase64 = fileData['iv'];
+    final String extension = fileData['extension'];
     
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Row(children: [
         const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
-        const SizedBox(width: 15), Expanded(child: Text("Reconstructing: $fileName...", overflow: TextOverflow.ellipsis)),
+        const SizedBox(width: 15), 
+        Expanded(child: Text("Scavenging Shards for: $fileName...", overflow: TextOverflow.ellipsis)),
       ]),
-      backgroundColor: const Color(0xFF0D2137), duration: const Duration(seconds: 3), 
+      backgroundColor: const Color(0xFF0D2137), duration: const Duration(seconds: 4), 
     ));
 
-    if (_selectedDocs.isNotEmpty || !mounted) { 
-      ScaffoldMessenger.of(context).hideCurrentSnackBar(); 
-      return; 
-    }
-
     try {
-      final String fileId = fileData['docId'];
-      final List<String> shards = List<String>.from(fileData['shards'] ?? []);
-      final String ivBase64 = fileData['iv'];
-      final String extension = fileData['extension'];
-
-      // 1. Download encrypted bytes from Node 1 (Supabase)
       final cloud = CloudDispatcher();
-      Uint8List? encryptedBytes = await cloud.downloadFromSupabase(fileId);
 
-      if (encryptedBytes == null) throw Exception("Node 1 unreachable or file missing.");
+      // 1. Download the Heavy File (The Burger) from Node 1
+      Uint8List? encryptedBytes = await cloud.downloadEncryptedFile(fileId);
+      if (encryptedBytes == null) throw Exception("Primary Node Unreachable.");
 
-      // 2. Rebuild Key & Decrypt
+      // 2. THE SCAVENGER HUNT (Step 3): Grab 3 tiny "Fry" shards from different nodes
+      // We use Future.wait to fire all requests at the same time for max speed!
+      final results = await Future.wait([
+        cloud.downloadShardFromSupabase(fileId),  // Shard 0
+        cloud.downloadShardFromAppwrite(fileId),  // Shard 1
+        cloud.downloadShardFromCloudinary(fileId),// Shard 2
+        cloud.downloadShardFromLocal(fileId),
+      ]);
+
+      // Filter out any failed requests
+      final List<String> gatheredShards = results.whereType<String>().toList();
+
+      // We need at least 3 to solve the math puzzle (Threshold k=3)
+      if (gatheredShards.length < 3) {
+        throw Exception("Quorum Failed: Need 3 shards, found ${gatheredShards.length}.");
+      }
+
+      // 3. Rebuild Key & Decrypt
       final crypto = EncryptionService();
-      String recoveredKey = crypto.rebuildAesKey(shards);
+      String recoveredKey = crypto.rebuildAesKey(gatheredShards);
       Uint8List plainBytes = crypto.decryptHeavyFile(encryptedBytes, recoveredKey, ivBase64);
 
-      // 3. Save to Temp Cache
+      // 4. Save to Temp Cache & Open
       final tempDir = await getTemporaryDirectory();
       final tempFile = File('${tempDir.path}/view_$fileId.$extension');
       await tempFile.writeAsBytes(plainBytes);
 
-      // 4. Log successful access to the Dashboard Radar
       await _securityMonitor.logAuthorizedAccess(
         target: fileName, ipAddress: "192.168.Secure", location: "Encrypted Tunnel", deviceType: "Trusted Mobile Client", accessedBy: "Verified Recipient",
       );
 
-      // 5. Open it natively!
       await OpenFilex.open(tempFile.path);
 
     } catch (e) {
       debugPrint("Decryption Error: $e");
-      
-      // Log the failure to the radar
       await _securityMonitor.logBreachAttempt(
         target: fileName, ipAddress: "HOSTILE IP", location: "Unknown Origin", deviceType: "Brute Force Tool",
       );
-      
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("CRASH: $e"), 
-          backgroundColor: Colors.redAccent
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("CRASH: $e"), backgroundColor: Colors.redAccent));
       }
     }
   }

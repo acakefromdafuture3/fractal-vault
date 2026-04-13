@@ -11,7 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import '../services/encryption_service.dart';
 import '../services/cloud_dispatcher.dart';
 import '../services/secret_vault_service.dart';
-import '../services/vault_dispatcher.dart'; // 🔥 The new cryptographic brain
+import '../services/vault_dispatcher.dart'; 
 
 class SecretVaultScreen extends StatefulWidget {
   const SecretVaultScreen({Key? key}) : super(key: key);
@@ -339,12 +339,10 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
     }
   }
 
-  // 🔥 UPGRADED: Now runs entirely through the VaultDispatcher
   Future<void> _addFileDirectlyToSecretVault() async {
     try {
       setState(() => _isLoading = true);
 
-      // We pass the active folder ID into the dispatcher so it knows where to map the shards
       await VaultDispatcher.initiateSecureUpload(
         context,
         folderId: _activeFolderId == 'unsorted' ? null : _activeFolderId,
@@ -358,37 +356,53 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
     }
   }
 
+  // 🔥 UPGRADED: Decentralized Reconstruction Logic for the Secret Vault
   Future<void> _openSecretFile(Map<String, dynamic> fileData) async {
     setState(() => _isLoading = true);
 
     try {
       final String fileId = fileData['docId'];
-      final List<String> shards = List<String>.from(fileData['shards']);
       final String ivBase64 = fileData['iv'];
       final String extension = fileData['extension'];
 
-      // 1. Fetch the Encrypted Bytes from the Cloud
       final cloud = CloudDispatcher();
-      Uint8List? encryptedBytes = await cloud.downloadFromSupabase(fileId);
+      
+      // 1. Fetch the Heavy Encrypted Bytes from Node 1 (The Burger)
+      Uint8List? encryptedBytes = await cloud.downloadEncryptedFile(fileId);
 
       if (encryptedBytes == null) {
-        throw Exception("Failed to retrieve encrypted data from nodes.");
+        throw Exception("Failed to retrieve encrypted data from primary node.");
       }
 
-      // 2. Re-forge the Master AES Key using the Shards
-      final crypto = EncryptionService();
-      String recoveredKey = crypto.rebuildAesKey(shards);
+      // 2. The Scavenger Hunt: Gather Key Fragments from other nodes (The Fries)
+      final results = await Future.wait([
+        cloud.downloadShardFromSupabase(fileId),
+        cloud.downloadShardFromAppwrite(fileId),
+        cloud.downloadShardFromCloudinary(fileId),
+        cloud.downloadShardFromLocal(fileId),
+      ]);
 
-      // 3. Decrypt the heavy file
+      // Filter out any failed network requests
+      final List<String> gatheredShards = results.whereType<String>().toList();
+
+      // Ensure we hit the mathematical threshold (k=3)
+      if (gatheredShards.length < 3) {
+        throw Exception("Quorum Failed: Need 3 shards, found ${gatheredShards.length}.");
+      }
+
+      // 3. Re-forge the Master AES Key using the Shards
+      final crypto = EncryptionService();
+      String recoveredKey = crypto.rebuildAesKey(gatheredShards);
+
+      // 4. Decrypt the heavy file
       Uint8List plainBytes = crypto.decryptHeavyFile(encryptedBytes, recoveredKey, ivBase64);
 
-      // 4. Save to a temporary, highly volatile cache directory
+      // 5. Save to a temporary cache directory
       final tempDir = await getTemporaryDirectory();
-      // We use the timestamp so old previews don't overwrite each other if open simultaneously 
       final tempFile = File('${tempDir.path}/decrypted_$fileId.$extension');
       await tempFile.writeAsBytes(plainBytes);
 
-      // 5. Open the file natively on the phone!
+      // 6. Open the file natively on the phone!
       await OpenFilex.open(tempFile.path);
 
     } catch (e) {
