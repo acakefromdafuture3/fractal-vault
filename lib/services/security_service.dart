@@ -1,20 +1,25 @@
+// Location: lib/services/security_service.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // 🔥 NEEDED TO IDENTIFY THE ACCOUNT
 
 class SecurityService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  // 1. THE LIVE DATA PIPELINE (For Tista's Home Screen)
+  // Helper to safely get the current account's UID
+  String get _currentUid => FirebaseAuth.instance.currentUser?.uid ?? 'UNKNOWN_USER';
+
+  // 1. THE LIVE DATA PIPELINE (Isolated per user!)
   Stream<Map<String, dynamic>> getSystemStats() {
     return _db
         .collection('system_stats')
-        .doc('current_status')
+        .doc(_currentUid) // 🔥 Saves stats specific to THIS account
         .snapshots() 
         .map((snapshot) {
       
       if (snapshot.exists && snapshot.data() != null) {
         return snapshot.data() as Map<String, dynamic>;
       } else {
-        // Safe fallback when the database is completely empty
         return {
           'securityScore': 0,
           'totalFiles': 0,
@@ -26,7 +31,7 @@ class SecurityService {
     });
   }
 
-  // 🔥 2. THE BREACH LOGGING PORTAL (New!)
+  // 🔥 2. THE BREACH LOGGING PORTAL
   Future<void> logBreachAttempt({
     required String target,
     required String ipAddress,
@@ -34,8 +39,8 @@ class SecurityService {
     required String deviceType,
   }) async {
     try {
-      // Step A: Save the detailed log for the Security Logs Screen
       await _db.collection('security_logs').add({
+        'ownerUid': _currentUid, // 🔥 TAGS THE LOG TO THE ACCOUNT BEING HACKED
         'target': target,
         'ipAddress': ipAddress,
         'location': location,
@@ -44,51 +49,71 @@ class SecurityService {
         'status': 'BLOCKED',
       });
 
-      // Step B: Automatically increment the 'threatsBlocked' stat for the Home Screen!
-      await _db.collection('system_stats').doc('current_status').set({
+      await _db.collection('system_stats').doc(_currentUid).set({
         'threatsBlocked': FieldValue.increment(1),
       }, SetOptions(merge: true));
 
     } catch (e) {
-      // We use print here instead of debugPrint so you don't have to import flutter/material
       print("Backend Error - Failed to log breach: $e");
     }
   }
+
   // 🔥 2.5 THE AUTHORIZED LOGGING PORTAL
   Future<void> logAuthorizedAccess({
     required String target,
     required String ipAddress,
     required String location,
     required String deviceType,
-    required String accessedBy, // E.g., "Tista" or "Admin"
+    required String accessedBy, 
   }) async {
     try {
       await _db.collection('security_logs').add({
+        'ownerUid': _currentUid, // 🔥 TAGS THE LOG TO THE ACCOUNT
         'target': target,
         'ipAddress': ipAddress,
         'location': location,
         'deviceType': deviceType,
         'accessedBy': accessedBy,
         'timestamp': FieldValue.serverTimestamp(),
-        'status': 'GRANTED', // 🔥 This word tells the UI to put it in the Green Tab!
+        'status': 'GRANTED', 
       });
     } catch (e) {
       print("Backend Error - Failed to log authorized access: $e");
     }
   }
 
-  // 🔥 3. FETCH SECURITY LOGS (For Tista's New Screen)
+  // 🔥 3. FETCH SECURITY LOGS (Filters out other people's logs!)
   Stream<List<Map<String, dynamic>>> getSecurityLogs() {
     return _db
         .collection('security_logs')
-        .orderBy('timestamp', descending: true) // Newest attacks first
+        .where('ownerUid', isEqualTo: _currentUid) // 🔥 ONLY GRAB THIS ACCOUNT'S LOGS
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs.map((doc) {
+      var logs = snapshot.docs.map((doc) {
         var data = doc.data();
-        data['logId'] = doc.id; // Always good practice to pass the ID
+        data['logId'] = doc.id; 
         return data;
       }).toList();
+
+      // 🔥 We sort the logs here in Dart so Firebase doesn't crash asking for a "Composite Index"
+      logs.sort((a, b) {
+        Timestamp? timeA = a['timestamp'] as Timestamp?;
+        Timestamp? timeB = b['timestamp'] as Timestamp?;
+        if (timeA == null || timeB == null) return 0;
+        return timeB.compareTo(timeA); // Puts newest at the top
+      });
+
+      return logs;
     });
+  }
+
+  // 🔥 4. THE LOG PURGE PROTOCOL 
+  Future<void> deleteSecurityLog(String logId) async {
+    try {
+      await _db.collection('security_logs').doc(logId).delete();
+      print("System: Security log $logId has been scrubbed from the database.");
+    } catch (e) {
+      print("Backend Error - Failed to scrub log: $e");
+    }
   }
 }

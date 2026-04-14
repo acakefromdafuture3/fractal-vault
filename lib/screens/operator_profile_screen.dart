@@ -4,8 +4,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:image_picker/image_picker.dart'; // 🔥 NEW: For Camera/Gallery
+import 'package:image_picker/image_picker.dart'; 
 import '../widgets/doodle_background.dart';
+import '../services/security_service.dart'; // 🔥 ADD THIS IMPORT
 
 class OperatorProfileScreen extends StatefulWidget {
   const OperatorProfileScreen({super.key});
@@ -21,57 +22,106 @@ class _OperatorProfileScreenState extends State<OperatorProfileScreen> {
   bool _isProcessing = false;
   bool _showPasswordSetup = false; 
 
-  // 🔥 NEW: Image Picker Variables
   File? _profileImage;
   final ImagePicker _picker = ImagePicker();
+  
+  // 🔥 THE HARDWARE LOCK VARIABLE
+  String _hardwareOwnerUid = "";
 
   @override
   void initState() {
     super.initState();
-    _loadProfileImage();
+    _initializeProfileData();
   }
 
-  // 🔥 Load the saved image when the screen boots up
-  Future<void> _loadProfileImage() async {
+  Future<void> _initializeProfileData() async {
     final prefs = await SharedPreferences.getInstance();
-    final imagePath = prefs.getString('operator_avatar');
+    
+    // 1. SET UP THE HARDWARE LOCK
+    // Check who originally registered this physical device
+    String? savedOwner = prefs.getString('hardware_owner_uid');
+    
+    if (savedOwner == null) {
+      // If this is the first login ever, register this phone to this user
+      savedOwner = user?.uid ?? "UNKNOWN";
+      await prefs.setString('hardware_owner_uid', savedOwner);
+    }
+    
+    // 2. LOAD THE PROFILE IMAGE (Tied to the specific user)
+    final String userKey = 'operator_avatar_${user?.uid}'; 
+    final imagePath = prefs.getString(userKey);
+    
+    File? loadedImage;
     if (imagePath != null && imagePath.isNotEmpty) {
       final file = File(imagePath);
-      if (await file.exists()) {
-        setState(() => _profileImage = file);
+      if (await file.existsSync()) {
+        loadedImage = file;
       }
     }
+
+    setState(() {
+      _hardwareOwnerUid = savedOwner!;
+      _profileImage = loadedImage;
+    });
   }
 
-  // 🔥 Handle Camera or Gallery selection
+  // 🔥 THE HACKER TRAP METHOD
+  // 🔥 TELL RITANKAR TO UPDATE THIS IN HIS LOGIC BRANCH:
+  // 🔥 THE HACKER TRAP METHOD (Updated to match Ritankar's Backend)
+  void _attemptProfileEdit() {
+    if (user?.uid != _hardwareOwnerUid) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("🛑 UNAUTHORIZED DEVICE: Profile modifications restricted to original hardware."),
+          backgroundColor: Colors.redAccent,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      
+      // 🚨 CALLING RITANKAR'S ACTUAL BREACH PROTOCOL!
+      SecurityService().logBreachAttempt(
+        target: "OPERATOR DOSSIER AVATAR", // Triggers the orange UI in the logs
+        ipAddress: "DETECTING...", 
+        location: "Hardware Mismatch",
+        deviceType: Platform.operatingSystem, 
+      );
+      
+      return; // BLOCKS THE CLICK ENTIRELY
+    }
+    
+    _showImageSourceDialog();
+  }
+
   Future<void> _pickImage(ImageSource source) async {
-    Navigator.pop(context); // Close the bottom sheet
+    Navigator.pop(context); 
     
     try {
       final XFile? pickedFile = await _picker.pickImage(
         source: source,
-        imageQuality: 80, // Compresses slightly to save phone memory
+        imageQuality: 80, 
       );
 
       if (pickedFile != null) {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('operator_avatar', pickedFile.path); // Save path
-        setState(() => _profileImage = File(pickedFile.path)); // Update UI
+        final String userKey = 'operator_avatar_${user?.uid}'; 
+        
+        await prefs.setString(userKey, pickedFile.path); 
+        setState(() => _profileImage = File(pickedFile.path)); 
       }
     } catch (e) {
       debugPrint("Image Picker Error: $e");
     }
   }
 
-  // 🔥 Wipe the image back to default
   Future<void> _removeImage() async {
     Navigator.pop(context);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('operator_avatar');
+    final String userKey = 'operator_avatar_${user?.uid}'; 
+    
+    await prefs.remove(userKey);
     setState(() => _profileImage = null);
   }
 
-  // 🔥 Tactical Bottom Sheet to choose the source
   void _showImageSourceDialog() {
     showModalBottomSheet(
       context: context,
@@ -97,7 +147,7 @@ class _OperatorProfileScreenState extends State<OperatorProfileScreen> {
               subtitle: const Text("Select existing visual data", style: TextStyle(color: Colors.white54, fontSize: 12)),
               onTap: () => _pickImage(ImageSource.gallery),
             ),
-            if (_profileImage != null) // Only show delete if there is an image!
+            if (_profileImage != null) 
               ListTile(
                 leading: const Icon(Icons.delete_forever, color: Colors.redAccent),
                 title: const Text("Purge Visual Data", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
@@ -111,7 +161,35 @@ class _OperatorProfileScreenState extends State<OperatorProfileScreen> {
     );
   }
 
-  Future<void> _setupFallbackPassword() async {
+ Future<void> _setupFallbackPassword() async {
+    // 🔥 THE NEW HACKER TRAP FOR PASSWORD OVERRIDE
+    if (user?.uid != _hardwareOwnerUid && _hardwareOwnerUid.isNotEmpty) {
+      // Hide the keyboard
+      FocusScope.of(context).unfocus(); 
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("🛑 ACCESS DENIED: Security protocol overrides restricted to original hardware."),
+          backgroundColor: Colors.redAccent,
+          duration: Duration(seconds: 4),
+        ),
+      );
+
+      // 🚨 LOG THE THREAT TO FIREBASE!
+      SecurityService().logBreachAttempt(
+        target: "EMERGENCY FALLBACK PASSWORD", // The target is the override system
+        ipAddress: "DETECTING...", 
+        location: "Hardware Mismatch",
+        deviceType: Platform.operatingSystem, 
+      );
+
+      // Clear their fake password and slam the menu shut!
+      _passwordController.clear();
+      setState(() => _showPasswordSetup = false);
+      return; // BLOCKS THE PASSWORD CHANGE ENTIRELY
+    }
+
+    // --- NORMAL OWNER LOGIC BELOW ---
     if (_passwordController.text.length < 6) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text("Password must be at least 6 characters."),
@@ -155,6 +233,9 @@ class _OperatorProfileScreenState extends State<OperatorProfileScreen> {
     final lastSignIn = user?.metadata.lastSignInTime?.toString().split(' ')[0] ?? "UNKNOWN";
     final uid = user?.uid ?? "OFFLINE-0000";
 
+    // 🔥 CHECK IF THE CURRENT USER IS THE DEVICE OWNER
+    final bool isIntruder = user?.uid != _hardwareOwnerUid;
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
@@ -190,15 +271,15 @@ class _OperatorProfileScreenState extends State<OperatorProfileScreen> {
                     decoration: BoxDecoration(
                       color: const Color(0xFF0D2137).withOpacity(0.8),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFF90CAFF).withOpacity(0.5), width: 1.5),
-                      boxShadow: [BoxShadow(color: const Color(0xFF90CAFF).withOpacity(0.2), blurRadius: 20)],
+                      border: Border.all(color: isIntruder ? Colors.redAccent.withOpacity(0.5) : const Color(0xFF90CAFF).withOpacity(0.5), width: 1.5),
+                      boxShadow: [BoxShadow(color: isIntruder ? Colors.redAccent.withOpacity(0.1) : const Color(0xFF90CAFF).withOpacity(0.2), blurRadius: 20)],
                     ),
                     child: Column(
                       children: [
                         
-                        // 🔥 INTERACTIVE AVATAR STACK
+                        // 🔥 THE SECURED AVATAR
                         GestureDetector(
-                          onTap: _showImageSourceDialog,
+                          onTap: _attemptProfileEdit, // Calls our Hacker Trap method
                           child: Stack(
                             alignment: Alignment.bottomRight,
                             children: [
@@ -208,17 +289,21 @@ class _OperatorProfileScreenState extends State<OperatorProfileScreen> {
                                 backgroundImage: _profileImage != null ? FileImage(_profileImage!) : null,
                                 child: _profileImage == null 
                                     ? const Icon(Icons.person, size: 55, color: Color(0xFF90CAFF))
-                                    : null, // Hides the icon if we have a photo
+                                    : null, 
                               ),
-                              // The little edit badge
+                              // 🔥 DYNAMIC ICON: Changes to a red lock if you are an intruder!
                               Container(
                                 padding: const EdgeInsets.all(6),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF90CAFF),
+                                  color: isIntruder ? Colors.redAccent : const Color(0xFF90CAFF),
                                   shape: BoxShape.circle,
                                   border: Border.all(color: const Color(0xFF0D2137), width: 2),
                                 ),
-                                child: const Icon(Icons.edit, size: 14, color: Color(0xFF0D2137)),
+                                child: Icon(
+                                  isIntruder ? Icons.lock : Icons.edit, 
+                                  size: 14, 
+                                  color: isIntruder ? Colors.white : const Color(0xFF0D2137)
+                                ),
                               ),
                             ],
                           ),
@@ -242,7 +327,7 @@ class _OperatorProfileScreenState extends State<OperatorProfileScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceAround,
                           children: [
-                            _buildDataRow("CLEARANCE", "MAXIMUM"),
+                            _buildDataRow("CLEARANCE", isIntruder ? "RESTRICTED" : "MAXIMUM"), // Sneaky UI change
                             _buildDataRow("STATUS", "ACTIVE", isGreen: true),
                           ],
                         ),
