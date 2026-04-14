@@ -40,7 +40,10 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    final imagePath = prefs.getString('operator_avatar'); 
+    
+    // 🔥 FIX: Add the user's UID to the end of the key!
+    final String userKey = 'operator_avatar_${user?.uid}'; 
+    final imagePath = prefs.getString(userKey);
     
     setState(() {
       _biometricsEnabled = (prefs.getString('vaultAuthMethod') == 'Biometrics');
@@ -192,6 +195,12 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
   Future<void> _terminateSession() async {
     if (_isProcessing) return;
     setState(() => _isProcessing = true); 
+    
+    // 🔥 NEW: Clear the vault's local memory before leaving!
+    // Optional: You could wipe the whole preferences if you want a totally clean slate for the next user.
+    // final prefs = await SharedPreferences.getInstance();
+    // await prefs.clear(); 
+    
     await FirebaseAuth.instance.signOut(); 
     if (mounted) {
       Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const LoginScreen()), (route) => false);
