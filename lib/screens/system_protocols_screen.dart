@@ -15,6 +15,7 @@ import '../services/email_service.dart';
 import 'otp_verification_screen.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+import 'package:screen_protector/screen_protector.dart'; // 🔥 NEEDED FOR STEALTH MODE
 
 class SystemProtocolsScreen extends StatefulWidget {
   const SystemProtocolsScreen({super.key});
@@ -123,8 +124,25 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
 
     await prefs.setBool('stealthMode', value);
 
+    // 🔥 THE ACTUAL STEALTH ACTIVATION LOGIC
+    try {
+      if (value) {
+        await ScreenProtector.preventScreenshotOn(); 
+        await ScreenProtector.protectDataLeakageWithColor(Colors.black); // Blacks out recent apps
+      } else {
+        await ScreenProtector.preventScreenshotOff();
+        await ScreenProtector.protectDataLeakageWithColorOff();
+      }
+    } catch (e) {
+      debugPrint("Stealth Mode Error: $e");
+    }
+
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(value ? "Stealth Mode Activated" : "Stealth Mode Disabled"), backgroundColor: value ? Colors.deepPurpleAccent : Colors.blueGrey, duration: const Duration(milliseconds: 800)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(value ? "Stealth Mode Activated: Screen hidden" : "Stealth Mode Disabled: Screen visible"), 
+        backgroundColor: value ? Colors.deepPurpleAccent : Colors.blueGrey, 
+        duration: const Duration(milliseconds: 800)
+      ));
     }
 
     await Future.delayed(const Duration(milliseconds: 500));
