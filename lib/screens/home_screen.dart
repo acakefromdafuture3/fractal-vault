@@ -1,13 +1,12 @@
 // Location: lib/screens/home_screen.dart
 
 import 'package:flutter/material.dart';
-import '../services/security_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
-import '../services/encryption_service.dart';
-import '../services/cloud_dispatcher.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,7 +16,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
-  final SecurityService _securityService = SecurityService();
   late AnimationController _pulseController;
 
   @override
@@ -28,8 +26,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
-    
-    // We completely removed the database initialization from here!
   }
 
   @override
@@ -41,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final String userId = FirebaseAuth.instance.currentUser?.uid ?? '';
 
     return Stack(
       children: [
@@ -61,58 +58,90 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         // LAYER 2: High-Tech Doodles
         const HomeDoodleBackground(),
 
-        // LAYER 3: UI Content wrapped in the LIVE STREAM
+        // LAYER 3: UI Content wrapped in LIVE FIREBASE STREAMS
         SafeArea(
-          child: StreamBuilder<Map<String, dynamic>>(
-            stream: _securityService.getSystemStats(),
-            builder: (context, snapshot) {
-              // Show your custom loading spinner while connecting
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator(color: Color(0xFF90CAFF)));
-              }
+          // 📡 STREAM 1: Fetch the live Vault Files
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance.collection('vault_files').where('ownerId', isEqualTo: userId).snapshots(),
+            builder: (context, fileSnapshot) {
+              
+              // 📡 STREAM 2: Fetch the live Security Logs
+              return StreamBuilder<QuerySnapshot>(
+                // We fetch all logs and filter in memory to avoid needing to build another Firebase Index
+                stream: FirebaseFirestore.instance.collection('security_logs').snapshots(),
+                builder: (context, logSnapshot) {
 
-              // Extract the live data (or use safe defaults)
-              final stats = snapshot.data ?? {};
-              final int score = stats['securityScore'] ?? 0;
-              final String status = score >= 90 ? "SECURE" : "WARNING"; // Auto-calculate status
+                  if (fileSnapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator(color: Color(0xFF90CAFF)));
+                  }
 
-              return SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const SizedBox(height: 50), 
-                    
-                    // HEADER
-                    const Text(
-                      "SYSTEM DIAGNOSTICS",
-                      style: TextStyle(color: Colors.white70, fontSize: 14, letterSpacing: 2, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 30),
+                  // 🧮 CALCULATE LIVE METRICS
+                  final int totalFiles = fileSnapshot.data?.docs.length ?? 0;
+                  final int activeShards = totalFiles * 5; // The Fractal Math!
 
-                    // GLOWING HEALTH GAUGE (Passing the live score and status)
-                    _buildHealthGauge(score, status),
+                  int threatsBlocked = 0;
+                  if (logSnapshot.hasData) {
+                    final logs = logSnapshot.data!.docs;
+                    for (var doc in logs) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      // Only count logs that belong to this specific user
+                      if (data['ownerId'] == userId || data['userId'] == userId) {
+                        threatsBlocked++;
+                      }
+                    }
+                  }
 
-                    const SizedBox(height: 40),
+                  // 🧮 DYNAMIC SECURITY SCORE
+                  int score = 100 - (threatsBlocked * 2); // Drops by 2% per threat
+                  if (score < 0) score = 0;
+                  
+                  String status = "SECURE";
+                  if (score < 90) status = "WARNING";
+                  if (score < 60) status = "CRITICAL";
 
-                    // COLOR-CODED DATA GRID (Passing live stats)
-                    GridView.count(
-                      crossAxisCount: 2,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      mainAxisSpacing: 16,
-                      crossAxisSpacing: 16,
-                      childAspectRatio: 0.95, 
+                  // ⏱️ LIVE RADAR PING TIME
+                  final now = DateTime.now();
+                  final lastScan = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+
+                  return SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        _buildStatCard("Total Files", '${stats['totalFiles'] ?? 0}', Icons.folder_zip, const Color(0xFFFFCA28)), 
-                        _buildStatCard("Active Shards", '${stats['activeShards'] ?? 0}', Icons.extension, const Color(0xFFB388FF)), 
-                        _buildStatCard("Threats Blocked", '${stats['threatsBlocked'] ?? 0}', Icons.gpp_bad, const Color(0xFFFF5252)), 
-                        _buildStatCard("Last Scan", '${stats['lastScan'] ?? '--:--'}', Icons.radar, const Color(0xFFAED581)), 
+                        const SizedBox(height: 50), 
+                        
+                        // HEADER
+                        const Text(
+                          "SYSTEM DIAGNOSTICS",
+                          style: TextStyle(color: Colors.white70, fontSize: 14, letterSpacing: 2, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 30),
+
+                        // GLOWING HEALTH GAUGE
+                        _buildHealthGauge(score, status),
+
+                        const SizedBox(height: 40),
+
+                        // COLOR-CODED DATA GRID
+                        GridView.count(
+                          crossAxisCount: 2,
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          mainAxisSpacing: 16,
+                          crossAxisSpacing: 16,
+                          childAspectRatio: 0.95, 
+                          children: [
+                            _buildStatCard("Total Files", '$totalFiles', Icons.folder_zip, const Color(0xFFFFCA28)), 
+                            _buildStatCard("Active Shards", '$activeShards', Icons.extension, const Color(0xFFB388FF)), 
+                            _buildStatCard("Threats Blocked", '$threatsBlocked', Icons.gpp_bad, const Color(0xFFFF5252)), 
+                            _buildStatCard("Last Scan", lastScan, Icons.radar, const Color(0xFFAED581)), 
+                          ],
+                        ),
+                        const SizedBox(height: 100), 
                       ],
                     ),
-                    const SizedBox(height: 100), 
-                  ],
-                ),
+                  );
+                }
               );
             },
           ),

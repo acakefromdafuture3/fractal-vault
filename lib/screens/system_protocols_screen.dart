@@ -5,6 +5,7 @@ import 'dart:ui'; // 🔥 Needed for the Glassmorphism blur!
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_generative_ai/google_generative_ai.dart'; // 🔥 THE AI ENGINE
 
 import '../widgets/doodle_background.dart';
 import 'login_screen.dart';
@@ -12,6 +13,8 @@ import 'operator_profile_screen.dart';
 import 'master_pin_setup_screen.dart'; 
 import '../services/email_service.dart';
 import 'otp_verification_screen.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
 
 class SystemProtocolsScreen extends StatefulWidget {
   const SystemProtocolsScreen({super.key});
@@ -41,7 +44,6 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     
-    // 🔥 FIX: Add the user's UID to the end of the key!
     final String userKey = 'operator_avatar_${user?.uid}'; 
     final imagePath = prefs.getString(userKey);
     
@@ -195,12 +197,6 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
   Future<void> _terminateSession() async {
     if (_isProcessing) return;
     setState(() => _isProcessing = true); 
-    
-    // 🔥 NEW: Clear the vault's local memory before leaving!
-    // Optional: You could wipe the whole preferences if you want a totally clean slate for the next user.
-    // final prefs = await SharedPreferences.getInstance();
-    // await prefs.clear(); 
-    
     await FirebaseAuth.instance.signOut(); 
     if (mounted) {
       Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const LoginScreen()), (route) => false);
@@ -226,10 +222,7 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
   }
 
   // 🔥 THE FROSTED GLASS AI WINDOW
-  // 🔥 THE FROSTED GLASS AI WINDOW WITH INTERNAL DOODLES
   void _showAIWindow(BuildContext context) {
-    TextEditingController _chatController = TextEditingController();
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -243,111 +236,24 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 12.0, sigmaY: 12.0), 
                 child: Container(
-                  height: MediaQuery.of(context).size.height * 0.65,
+                  height: MediaQuery.of(context).size.height * 0.75, // 🔥 Made taller for chat
                   decoration: BoxDecoration(
-                    // Slightly more opaque so the new internal doodles pop!
                     color: const Color(0xFF0D2137).withOpacity(0.75), 
                     border: Border(
                       top: BorderSide(color: const Color(0xFF90CAFF).withOpacity(0.8), width: 1.5),
                     ),
                   ),
-                  // 🔥 We use a Stack here to put doodles BEHIND the chat UI
                   child: Stack(
                     children: [
-                      // --- 1. THE AI DOODLE BACKGROUND ---
                       Positioned.fill(
                         child: Opacity(
-                          opacity: 0.4, // Adjust this to make doodles brighter/darker
+                          opacity: 0.4, 
                           child: const CodeDoodleBackground(
-                            // AI-specific icons!
                             icons: [Icons.smart_toy, Icons.memory, Icons.terminal, Icons.code, Icons.data_object, Icons.analytics],
                           ),
                         ),
                       ),
-
-                      // --- 2. THE CHAT UI CONTENT ---
-                      Padding(
-                        padding: const EdgeInsets.only(top: 20, left: 20, right: 20, bottom: 10),
-                        child: Column(
-                          children: [
-                            // --- Top Header ---
-                            Row(
-                              children: [
-                                const Icon(Icons.smart_toy, color: Color(0xFF90CAFF), size: 28),
-                                const SizedBox(width: 12),
-                                const Text(
-                                  "SYSTEM A.I.", 
-                                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.5)
-                                ),
-                                const Spacer(),
-                                IconButton(
-                                  icon: const Icon(Icons.close, color: Colors.white54),
-                                  onPressed: () => Navigator.pop(context),
-                                )
-                              ],
-                            ),
-                            const Divider(color: Colors.white24, height: 30),
-                            
-                            // --- Dummy Chat Area ---
-                            const Expanded(
-                              child: Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.auto_awesome, color: Colors.white24, size: 50),
-                                    SizedBox(height: 12),
-                                    Text(
-                                      "AI Core Online.\nAwaiting Ritankar's Logic Integration...", 
-                                      textAlign: TextAlign.center, 
-                                      style: TextStyle(color: Colors.white54, fontFamily: 'Courier')
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-
-                            // --- Input Field ---
-                            Container(
-                              margin: const EdgeInsets.only(top: 10, bottom: 10), 
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF071320).withOpacity(0.9), 
-                                borderRadius: BorderRadius.circular(24), 
-                                border: Border.all(color: const Color(0xFF90CAFF).withOpacity(0.4), width: 1),
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: TextField(
-                                      controller: _chatController,
-                                      style: const TextStyle(color: Colors.white),
-                                      decoration: const InputDecoration(
-                                        hintText: "Enter system inquiry...", 
-                                        hintStyle: TextStyle(color: Colors.white38),
-                                        border: InputBorder.none,
-                                        contentPadding: EdgeInsets.symmetric(horizontal: 16),
-                                      ),
-                                    ),
-                                  ),
-                                  Container(
-                                    decoration: const BoxDecoration(
-                                      color: Color(0xFF90CAFF),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: IconButton(
-                                      icon: const Icon(Icons.send, color: Color(0xFF0D2137), size: 20),
-                                      onPressed: () {
-                                        print("UI triggered: Send text to AI -> ${_chatController.text}");
-                                        _chatController.clear();
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      SystemAIWindow(onToggleStealth: _toggleStealthMode), // 👈 Gives AI the keys to the switch!
                     ],
                   ),
                 ),
@@ -359,7 +265,6 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
     );
   }
 
-  // 🔥 THIS IS THE BUILD METHOD THAT WENT MISSING!
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
@@ -378,7 +283,6 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
           decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [colors.primary, Colors.white], stops: const [0.2, 0.8])),
         ),
         
-        // YOUR DOODLES ARE RIGHT HERE!
         const CodeDoodleBackground(icons: [Icons.settings, Icons.build, Icons.memory, Icons.tune, Icons.admin_panel_settings, Icons.developer_board]),
         
         SafeArea(
@@ -394,7 +298,6 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
                   children: [
                     const Text("SYSTEM PROTOCOLS", style: TextStyle(color: Color(0xFF90CAFF), fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 2.0)),
                     
-                    // The trigger for the AI Window
                     Container(
                       decoration: BoxDecoration(
                         color: const Color(0xFF0D2137).withOpacity(0.8),
@@ -543,6 +446,271 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.white54)),
         trailing: trailing,
+      ),
+    );
+  }
+}
+
+// =====================================================================
+// 🔥 THE SYSTEM A.I. CHAT INTERFACE (WITH FUNCTION CALLING)
+// =====================================================================
+class SystemAIWindow extends StatefulWidget {
+  final ValueChanged<bool> onToggleStealth; // 👈 AI's key to the physical UI
+
+  const SystemAIWindow({super.key, required this.onToggleStealth});
+
+  @override
+  State<SystemAIWindow> createState() => _SystemAIWindowState();
+}
+
+class _SystemAIWindowState extends State<SystemAIWindow> {
+  final TextEditingController _chatController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  
+  late final GenerativeModel _model;
+  late final ChatSession _chatSession;
+  
+  bool _isLoading = false;
+  final List<Map<String, String>> _messages = []; 
+
+  final String _apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeAI();
+  }
+
+  void _initializeAI() {
+    // 🛡️ 1. DEFINE THE AI'S ABILITIES (Tools)
+    final aiTools = [
+      Tool(functionDeclarations: [
+        FunctionDeclaration(
+          'set_stealth_mode',
+          'Enables or disables the vault stealth mode. Use this when the operator asks to go dark, hide the app, or enable/disable stealth.',
+          Schema(
+            SchemaType.object,
+            properties: {
+              'enabled': Schema(SchemaType.boolean, description: 'True to enable stealth mode, false to disable.')
+            },
+            requiredProperties: ['enabled'],
+          ),
+        ),
+        FunctionDeclaration(
+          'check_node_health',
+          'Pings the 5 decentralized network nodes to check their online status and quorum health.',
+          Schema(SchemaType.object),
+        )
+      ]),
+    ];
+
+    // 🛡️ 2. SYSTEM INSTRUCTION
+    final systemInstruction = Content.system(
+      "You are the 'System A.I.', an elite cyber-guardian for the 'Fractal Vault'. "
+      "Your operators are Ritankar and Tista. "
+      "PRIME DIRECTIVES: "
+      "1. You have access to system tools. Use them when requested. "
+      "2. If a node or component is reported as OFFLINE, you are authorized to analyze the technical situation and provide expert hypotheses on potential causes (e.g., handshake timeouts, packet loss, or server-side maintenance). "
+      "3. Always reassure the operator of the Vault's integrity if the Quorum is still stable. "
+      "4. Keep your tone elite, tactical, and helpful."
+    );
+
+    _model = GenerativeModel(
+      model: 'gemini-2.5-flash',
+      apiKey: _apiKey,
+      tools: aiTools, // 👈 INJECT THE TOOLS INTO THE BRAIN
+      systemInstruction: systemInstruction,
+    );
+
+    _chatSession = _model.startChat();
+    
+    _messages.add({
+      'role': 'ai',
+      'text': "AI Core Online. System tools integrated. Awaiting command..."
+    });
+  }
+
+  Future<void> _sendMessage() async {
+    final text = _chatController.text.trim();
+    if (text.isEmpty) return;
+
+    setState(() {
+      _messages.add({'role': 'user', 'text': text});
+      _isLoading = true;
+    });
+    
+    _chatController.clear();
+    _scrollToBottom();
+
+    try {
+      final response = await _chatSession.sendMessage(Content.text(text));
+      
+      // 🧠 DID GEMINI DECIDE TO CALL A FUNCTION?
+      if (response.functionCalls.isNotEmpty) {
+        for (final call in response.functionCalls) {
+          
+          // ⚡ TRIGGER: STEALTH MODE
+          if (call.name == 'set_stealth_mode') {
+            final isEnabled = call.args['enabled'] as bool;
+            
+            // ACTUALLY FLIP THE SWITCH IN THE APP!
+            widget.onToggleStealth(isEnabled);
+            
+            // Tell Gemini the mission was successful
+            final funcResponse = await _chatSession.sendMessage(
+              Content.functionResponse(call.name, {'status': 'SUCCESS', 'stealth_active': isEnabled})
+            );
+            
+            setState(() {
+              _messages.add({'role': 'ai', 'text': funcResponse.text ?? "Stealth Protocol Executed."});
+            });
+          }
+          
+          // ⚡ TRIGGER: NODE HEALTH DIAGNOSTIC
+         // ⚡ TRIGGER: DYNAMIC 5-NODE DIAGNOSTIC
+else if (call.name == 'check_node_health') {
+  setState(() => _isLoading = true);
+
+  // 🌐 Pull the Project ID from the environment
+  final String supabaseId = dotenv.env['SUPABASE_PROJECT_ID'] ?? '';
+
+  final results = await Future.wait([
+    _pingNode("https://$supabaseId.supabase.co/rest/v1/"), // 🔥 Now Dynamic!
+    _pingNode("https://cloud.appwrite.io/v1/health"),
+    _pingNode("https://api.cloudinary.com/v1_1/health"),
+    _pingNode("https://ik.imagekit.io/"), 
+  ]);
+
+  int onlineCount = results.where((e) => e).length + 1; 
+  
+  final liveData = {
+    'Node_1_Supabase': results[0] ? 'ONLINE' : 'OFFLINE',
+    'Node_2_Appwrite': results[1] ? 'ONLINE' : 'OFFLINE',
+    'Node_3_Cloudinary': results[2] ? 'ONLINE' : 'OFFLINE',
+    'Node_4_ImageKit': results[3] ? 'ONLINE' : 'OFFLINE',
+    'Node_5_Local_Hardware': 'ONLINE',
+    'Quorum_Status': onlineCount >= 3 ? 'STABLE' : 'CRITICAL',
+    'Network_Efficiency': "${(onlineCount / 5 * 100).toInt()}%"
+  };
+
+  final funcResponse = await _chatSession.sendMessage(
+    Content.functionResponse(call.name, liveData)
+  );
+
+  setState(() {
+    _messages.add({'role': 'ai', 'text': funcResponse.text ?? "Diagnostic complete."});
+  });
+}
+        }
+      } 
+      // 🧠 NORMAL TEXT RESPONSE
+      else {
+        setState(() {
+          _messages.add({'role': 'ai', 'text': response.text ?? "Error: Null neural response."});
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _messages.add({'role': 'ai', 'text': "SYSTEM ERROR: Neural link severed.\n$e"});
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+      _scrollToBottom();
+    }
+  }
+
+  void _scrollToBottom() {
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+  // 🔥 PASTE IT HERE (Inside the _SystemAIWindowState class)
+  Future<bool> _pingNode(String url) async {
+  try {
+    final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 5));
+    
+    debugPrint("System Node Check [$url] returned: ${response.statusCode}");
+
+    // 🛡️ THE SECURITY LOGIC: 
+    // If the server responds with 200, 401 (Auth Error), or 404 (Not Found), 
+    // it means the server is UP and active. 
+    // We only fail if there is no response at all or a 500+ Server Error.
+    return response.statusCode < 500; 
+  } catch (e) {
+    debugPrint("System Node Check [$url] failed: $e");
+    return false; // This handles the SocketException (DNS failure)
+  }
+}
+  
+
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 20, left: 20, right: 20, bottom: 10),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.smart_toy, color: Color(0xFF90CAFF), size: 28),
+              const SizedBox(width: 12),
+              const Text(
+                "SYSTEM A.I.", 
+                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.5)
+              ),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.white54),
+                onPressed: () => Navigator.pop(context),
+              )
+            ],
+          ),
+          const Divider(color: Colors.white24, height: 20),
+          Expanded(
+            child: ListView.builder(
+              controller: _scrollController,
+              itemCount: _messages.length,
+              itemBuilder: (context, index) {
+                final msg = _messages[index];
+                final isUser = msg['role'] == 'user';
+                return Align(
+                  alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Container(
+                    margin: EdgeInsets.only(bottom: 12, left: isUser ? 40 : 0, right: isUser ? 0 : 40),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: isUser ? const Color(0xFF90CAFF).withOpacity(0.2) : Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(16).copyWith(
+                        bottomRight: isUser ? Radius.zero : const Radius.circular(16),
+                        bottomLeft: isUser ? const Radius.circular(16) : Radius.zero,
+                      ),
+                      border: Border.all(color: isUser ? const Color(0xFF90CAFF).withOpacity(0.5) : Colors.white24),
+                    ),
+                    child: Text(msg['text']!, style: TextStyle(color: isUser ? Colors.white : const Color(0xFF90CAFF), fontFamily: isUser ? null : 'Courier')),
+                  ),
+                );
+              },
+            ),
+          ),
+          if (_isLoading) const Align(alignment: Alignment.centerLeft, child: Text("Processing neural command...", style: TextStyle(color: Colors.white38, fontSize: 10, fontFamily: 'Courier'))),
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(color: const Color(0xFF071320).withOpacity(0.9), borderRadius: BorderRadius.circular(24), border: Border.all(color: const Color(0xFF90CAFF).withOpacity(0.4))),
+            child: Row(children: [
+              Expanded(child: TextField(controller: _chatController, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(hintText: "Enter system command...", hintStyle: TextStyle(color: Colors.white38), border: InputBorder.none, contentPadding: EdgeInsets.symmetric(horizontal: 16)))),
+              Container(decoration: const BoxDecoration(color: Color(0xFF90CAFF), shape: BoxShape.circle), child: IconButton(icon: const Icon(Icons.send, color: Color(0xFF0D2137), size: 20), onPressed: _isLoading ? null : _sendMessage)),
+            ]),
+          ),
+        ],
       ),
     );
   }

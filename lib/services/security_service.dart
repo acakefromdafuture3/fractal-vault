@@ -1,7 +1,7 @@
 // Location: lib/services/security_service.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // 🔥 NEEDED TO IDENTIFY THE ACCOUNT
+import 'package:firebase_auth/firebase_auth.dart';
 
 class SecurityService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -9,56 +9,33 @@ class SecurityService {
   // Helper to safely get the current account's UID
   String get _currentUid => FirebaseAuth.instance.currentUser?.uid ?? 'UNKNOWN_USER';
 
-  // 1. THE LIVE DATA PIPELINE (Isolated per user!)
-  Stream<Map<String, dynamic>> getSystemStats() {
-    return _db
-        .collection('system_stats')
-        .doc(_currentUid) // 🔥 Saves stats specific to THIS account
-        .snapshots() 
-        .map((snapshot) {
-      
-      if (snapshot.exists && snapshot.data() != null) {
-        return snapshot.data() as Map<String, dynamic>;
-      } else {
-        return {
-          'securityScore': 0,
-          'totalFiles': 0,
-          'activeShards': 0,
-          'threatsBlocked': 0,
-          'lastScan': '--:--', 
-        };
-      }
-    });
-  }
-
-  // 🔥 2. THE BREACH LOGGING PORTAL
+  // 🔥 1. THE BREACH LOGGING PORTAL
   Future<void> logBreachAttempt({
     required String target,
     required String ipAddress,
     required String location,
     required String deviceType,
   }) async {
+    if (_currentUid == 'UNKNOWN_USER') return;
+
     try {
       await _db.collection('security_logs').add({
-        'ownerUid': _currentUid, // 🔥 TAGS THE LOG TO THE ACCOUNT BEING HACKED
+        'ownerId': _currentUid, // 🔒 FIXED: Matches Home Screen & Vault Files perfectly
         'target': target,
         'ipAddress': ipAddress,
         'location': location,
         'deviceType': deviceType,
         'timestamp': FieldValue.serverTimestamp(),
         'status': 'BLOCKED',
+        'isThreat': true, // Helps us easily filter threats later
       });
-
-      await _db.collection('system_stats').doc(_currentUid).set({
-        'threatsBlocked': FieldValue.increment(1),
-      }, SetOptions(merge: true));
-
+      print("System: Breach logged successfully for $_currentUid");
     } catch (e) {
       print("Backend Error - Failed to log breach: $e");
     }
   }
 
-  // 🔥 2.5 THE AUTHORIZED LOGGING PORTAL
+  // 🔥 2. THE AUTHORIZED LOGGING PORTAL
   Future<void> logAuthorizedAccess({
     required String target,
     required String ipAddress,
@@ -66,16 +43,19 @@ class SecurityService {
     required String deviceType,
     required String accessedBy, 
   }) async {
+    if (_currentUid == 'UNKNOWN_USER') return;
+
     try {
       await _db.collection('security_logs').add({
-        'ownerUid': _currentUid, // 🔥 TAGS THE LOG TO THE ACCOUNT
+        'ownerId': _currentUid, // 🔒 FIXED
         'target': target,
         'ipAddress': ipAddress,
         'location': location,
         'deviceType': deviceType,
         'accessedBy': accessedBy,
         'timestamp': FieldValue.serverTimestamp(),
-        'status': 'GRANTED', 
+        'status': 'GRANTED',
+        'isThreat': false, 
       });
     } catch (e) {
       print("Backend Error - Failed to log authorized access: $e");
@@ -86,7 +66,7 @@ class SecurityService {
   Stream<List<Map<String, dynamic>>> getSecurityLogs() {
     return _db
         .collection('security_logs')
-        .where('ownerUid', isEqualTo: _currentUid) // 🔥 ONLY GRAB THIS ACCOUNT'S LOGS
+        .where('ownerId', isEqualTo: _currentUid) // 🔒 FIXED: Only grabs THIS account's logs
         .snapshots()
         .map((snapshot) {
       var logs = snapshot.docs.map((doc) {
@@ -95,12 +75,12 @@ class SecurityService {
         return data;
       }).toList();
 
-      // 🔥 We sort the logs here in Dart so Firebase doesn't crash asking for a "Composite Index"
+      // 🔥 Sort logs in Dart to avoid needing a complex Firebase Composite Index
       logs.sort((a, b) {
         Timestamp? timeA = a['timestamp'] as Timestamp?;
         Timestamp? timeB = b['timestamp'] as Timestamp?;
         if (timeA == null || timeB == null) return 0;
-        return timeB.compareTo(timeA); // Puts newest at the top
+        return timeB.compareTo(timeA); // Newest at the top
       });
 
       return logs;
@@ -111,7 +91,7 @@ class SecurityService {
   Future<void> deleteSecurityLog(String logId) async {
     try {
       await _db.collection('security_logs').doc(logId).delete();
-      print("System: Security log $logId has been scrubbed from the database.");
+      print("System: Security log $logId has been scrubbed.");
     } catch (e) {
       print("Backend Error - Failed to scrub log: $e");
     }
