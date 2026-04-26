@@ -1,17 +1,17 @@
+// Location: lib/services/vault_service.dart
+
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:device_info_plus/device_info_plus.dart'; // 🔥 Hardware Fingerprinting
 import 'cloud_dispatcher.dart'; 
 
 class VaultService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final CloudDispatcher _cloud = CloudDispatcher(); // Initialize your nodes
 
-  /// 🔥 THE ENCRYPTED MULTI-NODE PORTAL
-  /// 🔥 THE ENCRYPTED MULTI-NODE PORTAL
-  // Location: lib/services/vault_service.dart
-
-  /// 🔥 THE ENCRYPTED MULTI-NODE PORTAL (Upgraded to Decentralized)
+  /// 🔥 THE ENCRYPTED MULTI-NODE PORTAL (Upgraded with Hardware Binding)
   Future<void> uploadEncryptedFile({
     required String name,
     required String extension,
@@ -24,25 +24,40 @@ class VaultService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception("No authenticated operator found.");
 
+    // 🕵️ 1. CAPTURE HARDWARE FINGERPRINT
+    var deviceInfo = DeviceInfoPlugin();
+    String deviceId = "unknown";
+    try {
+      if (Platform.isAndroid) {
+        var androidInfo = await deviceInfo.androidInfo;
+        deviceId = androidInfo.id; // Unique Android ID
+      } else if (Platform.isIOS) {
+        var iosInfo = await deviceInfo.iosInfo;
+        deviceId = iosInfo.identifierForVendor ?? "unknown";
+      }
+    } catch (e) {
+      print("Hardware Fingerprint Failed: $e");
+    }
+
     final String fileId = DateTime.now().millisecondsSinceEpoch.toString();
     String cleanType = _normalizeCategory(extension);
 
-    // 🔥 UPGRADE: We now pass the 'shards' to the cloud nodes instead of Firestore
+    // 2. DISPATCH TO DECENTRALIZED NODES
     final Map<String, String> nodeLinks = await _cloud.disperseToNodes(
       fileId: fileId,
       bytes: encryptedBytes,
       extension: extension,
-      shards: shards, // 🚀 Dispatching the shards!
+      shards: shards, 
     );
 
-    // SECURE THE METADATA IN FIRESTORE (Keys are now GONE from here)
+    // 3. SECURE METADATA IN FIRESTORE
     await _db.collection('vault_files').doc(fileId).set({
       'ownerId': user.uid, 
+      'uploaderDeviceId': deviceId, // 🔥 THE HARDWARE BINDING
       'name': name,
       'type': cleanType,
       'extension': extension,
       'iv': iv,             
-      // 'shards': shards, ❌ REMOVED: Firestore no longer sees the key!
       'nodeLinks': nodeLinks, 
       'isSecret': isSecret, 
       'folderId': folderId,
@@ -51,10 +66,13 @@ class VaultService {
     });
   }
 
-  // 1. Fetch ALL files (Sorted by dateAdded to match Tista's UI)
+  // 1. Fetch ALL files (Scoped to the current user)
   Stream<List<Map<String, dynamic>>> getVaultFiles() {
+    final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
+
     return _db
         .collection('vault_files')
+        .where('ownerId', isEqualTo: currentUserId) // 🔥 THE LOCK: Isolates your files from Tista's
         .where('isSecret', isEqualTo: false)
         .orderBy('dateAdded', descending: true)
         .snapshots()
@@ -65,16 +83,18 @@ class VaultService {
         
         // THE INTERCEPTOR: Acts as a safety net for manual Ghost Files
         data['type'] = _normalizeCategory(data['type']?.toString());
-
         return data;
       }).toList();
     });
   }
 
-  // 2. Fetch "Recent" files (Now sorts by dateAdded to prevent crashes!)
+  // 2. Fetch "Recent" files (Scoped to the current user)
   Stream<List<Map<String, dynamic>>> getRecentFiles() {
+    final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
+
     return _db
         .collection('vault_files')
+        .where('ownerId', isEqualTo: currentUserId) // 🔥 THE LOCK
         .where('isSecret', isEqualTo: false)
         .orderBy('dateAdded', descending: true) 
         .limit(3)
@@ -86,7 +106,6 @@ class VaultService {
         
         // THE INTERCEPTOR
         data['type'] = _normalizeCategory(data['type']?.toString());
-
         return data;
       }).toList();
     });
