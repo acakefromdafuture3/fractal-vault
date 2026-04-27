@@ -162,7 +162,6 @@ flutter run
 ## 👥 The Operators (Team Parallel Minds)
 
 * **Ritankar Bose** - *Lead Architect & Cryptography Developer*
-* **Tista** - *Frontend Systems & UX Integration*
-* **Rani Bhattacharjee** - *Developer & Systems Integration*
+* **Rani Bhattacharjee** - *Frontend Systems & UX Integration*
 
 *Designed with 💙 for the Google Solution Challenge 2026.*
