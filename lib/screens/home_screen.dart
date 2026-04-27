@@ -84,10 +84,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     final logs = logSnapshot.data!.docs;
                     for (var doc in logs) {
                       final data = doc.data() as Map<String, dynamic>;
-                      // Only count logs that belong to this specific user
-                      if (data['ownerId'] == userId || data['userId'] == userId) {
-                        threatsBlocked++;
-                      }
+                      // 💡 FIXED: Only increment if it's an actual threat!
+  bool isThisUser = data['ownerId'] == userId || data['userId'] == userId;
+  bool isActualThreat = data['isThreat'] == true; 
+
+  if (isThisUser && isActualThreat) {
+    threatsBlocked++;
+  }
                     }
                   }
 

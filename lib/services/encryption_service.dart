@@ -93,8 +93,7 @@ class EncryptionService {
     }
 
     // Convert the massive integer back into our 32-character AES string
-    String hex = (secret % _prime).toRadixString(16);
-    if (hex.length % 2 != 0) hex = '0$hex';
+    String hex = (secret % _prime).toRadixString(16).padLeft(64, '0');
     List<int> bytes = [];
     for (int i = 0; i < hex.length; i += 2) {
       bytes.add(int.parse(hex.substring(i, i + 2), radix: 16));
