@@ -35,10 +35,28 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.13.1 # 🔥 NEW: Added the dev dependency you need to generate the icon!
 
 flutter:
   uses-material-design: true
-
-  # 🛡️ THE VAULT IS OFFICIALLY REGISTERED HERE:
+  
+  # 🔥 COMBINED ASSETS LIST
   assets:
+    - assets/images/vault_logo.png
+    - assets/images/icon_bg.png # Added the background layer
+    - assets/images/icon_fg.png # Added the foreground layer
     - .env
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/vault_logo.png" 
+  min_sdk_android: 21
+  
+  # 🛡️ THE ANDROID ADAPTIVE ICON OVERRIDE:
+  adaptive_icon_background: "assets/images/icon_bg.png"
+  adaptive_icon_foreground: "assets/images/icon_fg.png"
+  
+  web:
+    generate: true
+    image_path: "assets/images/vault_logo.png"

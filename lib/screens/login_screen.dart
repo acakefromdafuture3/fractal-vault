@@ -2,21 +2,49 @@
 
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
-import 'master_pin_auth_screen.dart'; // 🔥 NEW: Importing the Gatekeeper!
+import 'master_pin_auth_screen.dart'; 
 import 'register_screen.dart'; 
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
+  // 🔥 Added SingleTickerProviderStateMixin so the screen can run animations!
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final AuthService _authService = AuthService();
   bool _isLoading = false;
+
+  // 🔥 ANIMATION VARIABLES FOR THE SCANNER
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    // 🔥 Setup the breathing/pulsing animation
+    _pulseController = AnimationController(
+      vsync: this, 
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true); // This makes it pulse in and out forever
+
+    _pulseAnimation = Tween<double>(begin: 0.1, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    // Always clean up animations when leaving the screen!
+    _pulseController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   void _handleLogin() async {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
@@ -36,7 +64,6 @@ class _LoginScreenState extends State<LoginScreen> {
     if (user != null) {
       Navigator.pushReplacement(
         context,
-        // 🔥 CHANGED: Now pushes to the Auth Screen instead of the Dashboard!
         MaterialPageRoute(builder: (context) => const MasterPinAuthScreen()), 
       );
     } else {
@@ -52,7 +79,6 @@ class _LoginScreenState extends State<LoginScreen> {
     if (user != null) {
       Navigator.pushReplacement(
         context,
-        // 🔥 CHANGED: Now pushes to the Auth Screen instead of the Dashboard!
         MaterialPageRoute(builder: (context) => const MasterPinAuthScreen()), 
       );
     } else {
@@ -92,8 +118,33 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(Icons.fingerprint, size: 90, color: Color(0xFF90CAFF)),
+                  
+                  // 🔥 THE ANIMATED HOLOGRAPHIC FINGERPRINT!
+                  AnimatedBuilder(
+                    animation: _pulseAnimation,
+                    builder: (context, child) {
+                      return Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF90CAFF).withOpacity(_pulseAnimation.value * 0.5),
+                              blurRadius: 40 * _pulseAnimation.value,
+                              spreadRadius: 15 * _pulseAnimation.value,
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.fingerprint, 
+                          size: 90, 
+                          color: Colors.white, // White icon looks great against the cyan glow
+                        ),
+                      );
+                    },
+                  ),
                   const SizedBox(height: 20),
+
                   Text(
                     "Fractal Vault",
                     textAlign: TextAlign.center,
@@ -104,6 +155,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 60),
+                  
                   _buildSecureInput(
                     controller: _emailController,
                     labelText: "Auth ID / Email",
@@ -112,6 +164,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     colors: colors,
                   ),
                   const SizedBox(height: 20),
+                  
                   _buildSecureInput(
                     controller: _passwordController,
                     labelText: "Security Key / Password",
@@ -121,6 +174,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     colors: colors,
                   ),
                   const SizedBox(height: 40),
+                  
                   _isLoading
                       ? const Center(child: CircularProgressIndicator())
                       : Column(
@@ -139,7 +193,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                             const SizedBox(height: 15),
-                            // Google Sign In Button
+                            
                             OutlinedButton.icon(
                               onPressed: _handleGoogleSignIn,
                               icon: const Icon(Icons.login, size: 18),
@@ -151,6 +205,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                             const SizedBox(height: 20),
+                            
                             TextButton(
                               onPressed: () {
                                 Navigator.push(context, MaterialPageRoute(builder: (context) => const RegisterScreen()));
