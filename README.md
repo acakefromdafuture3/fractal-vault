@@ -65,7 +65,7 @@ Fractal Vault is guarded by an integrated autonomous cyber-guardian. The Sentine
 | :--- | :--- | :--- |
 | 📱 **Frontend** | ![Flutter](https://img.shields.io/badge/Flutter-%2302569B.svg?style=flat&logo=Flutter&logoColor=white) <br> **Dart** | High-performance, cross-platform UI with "Glassmorphic" terminal aesthetics and Local Cryptographic Engine execution. |
 | ☁️ **Orchestration** | ![Firebase](https://img.shields.io/badge/firebase-%23039BE5.svg?style=flat&logo=firebase) <br> **Cloud Functions** | Secure identity management, Cloud Firestore for encrypted metadata (doc_ids), and Serverless OTP delivery. |
-| 🧠 **AI Integration** | ![Gemini](https://img.shields.io/badge/Gemini-%238E75B2.svg?style=flat&logo=googlebard&logoColor=white) <br> **Gemini 1.5 Flash** | Powers the Sentinel AI via the `google_generative_ai` SDK, utilizing advanced Function Calling for system controls. |
+| 🧠 **AI Integration** | ![Gemini](https://img.shields.io/badge/Gemini-%238E75B2.svg?style=flat&logo=googlebard&logoColor=white) <br> **Gemini 2.5 Flash** | Powers the Sentinel AI via the `google_generative_ai` SDK, utilizing advanced Function Calling for system controls. |
 | 🗄️ **Storage Nodes** | ![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=flat&logo=supabase&logoColor=white) ![Appwrite](https://img.shields.io/badge/Appwrite-FD366E?style=flat&logo=appwrite&logoColor=white) <br> **Cloudinary / ImageKit** | The independent, decentralized architecture that houses the fragmented AES-256 Key shards. |
 | 🌐 **Web Presence** | ![Firebase Hosting](https://img.shields.io/badge/Firebase_Hosting-FFCA28?style=flat&logo=firebase&logoColor=black) | High-speed global deployment of the architectural landing page and project documentation. |
 
@@ -159,7 +159,7 @@ flutter run
 
 ---
 
-## 👥 The Operators (Team Parallel Minds)
+## 👥 The Operators (Team Dual Cortex)
 
 * **Ritankar Bose** - *Lead Architect & Cryptography Developer*
 * **Rani Bhattacharjee** - *Frontend Systems & UX Integration*
