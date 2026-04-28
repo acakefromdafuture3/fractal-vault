@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io'; 
 import 'package:open_filex/open_filex.dart';
-// 🔥 FIXED PATHS: Added ../services/ to tell Flutter where they actually live
+import 'package:firebase_auth/firebase_auth.dart'; 
+import '../services/security_service.dart'; 
 import '../services/vault_service.dart'; 
 import 'secret_vault_screen.dart'; 
-
-// IMPORTANT: Make sure you actually created a file named vault_setup_wizard.dart in your screens folder!
 import 'vault_setup_wizard.dart';
+
 class MainVaultScreen extends StatefulWidget {
   const MainVaultScreen({Key? key}) : super(key: key);
 
@@ -17,8 +17,9 @@ class MainVaultScreen extends StatefulWidget {
 
 class _MainVaultScreenState extends State<MainVaultScreen> {
   final VaultService _vaultService = VaultService();
+  final SecurityService _securityService = SecurityService(); 
+  final user = FirebaseAuth.instance.currentUser; 
   
-  // Settings for the Secret Vault trigger
   String _vaultLocation = '';
   bool _vaultIsHidden = false;
   String _vaultTrigger = '';
@@ -29,7 +30,6 @@ class _MainVaultScreenState extends State<MainVaultScreen> {
     _loadSecretVaultSettings();
   }
 
-  // We load the settings so we know IF we should show the secret trigger here
   Future<void> _loadSecretVaultSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -39,13 +39,12 @@ class _MainVaultScreenState extends State<MainVaultScreen> {
     });
   }
 
-  // This refreshes the settings when you come back from the Setup Wizard
   Future<void> _openSetupWizard() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) =>VaultSetupWizard()),
+      MaterialPageRoute(builder: (context) => const VaultSetupWizard()),
     );
-    _loadSecretVaultSettings(); // Reload settings in case they changed them!
+    _loadSecretVaultSettings(); 
   }
 
   void _openSecretVault() {
@@ -54,7 +53,7 @@ class _MainVaultScreenState extends State<MainVaultScreen> {
       MaterialPageRoute(builder: (context) => const SecretVaultScreen()),
     );
   }
-  // 🔥 Opens the file when you tap it in the vault!
+
   Future<void> _openSecretFile(Map<String, dynamic> fileData) async {
     if (fileData['path'] != null) {
       try {
@@ -68,26 +67,78 @@ class _MainVaultScreenState extends State<MainVaultScreen> {
           }
           return; 
         }
-        // Uses OpenFilex to launch the photo/video in your phone's native viewer
         await OpenFilex.open(fileData['path']);
       } catch (e) {
         debugPrint("Error opening file: $e");
       }
     }
   }
+
+  // 🔥 THE UNIVERSAL BOUNCER (Blocks Deleting AND Moving)
+ // 🔥 THE UNIVERSAL BOUNCER (Blocks Deleting AND Moving)
+  Future<void> _attemptSecureAction(String actionType, Map<String, dynamic> fileData) async {
+    final fileOwnerId = fileData['ownerId'] ?? "UNKNOWN_OWNER";
+    final docId = fileData['docId']; // We need the Document ID for Firestore!
+
+    if (docId == null) {
+      debugPrint("Error: No document ID found for this file.");
+      return;
+    }
+    
+    // CHECK THE ID - If it doesn't match, spring the trap!
+    if (user == null || user!.uid != fileOwnerId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("🛑 ACCESS DENIED: You lack clearance to $actionType '${fileData['name']}'."),
+          backgroundColor: Colors.redAccent,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+
+      _securityService.logBreachAttempt(
+        target: "UNAUTHORIZED FILE ${actionType.toUpperCase()}: ${fileData['name']}",
+        ipAddress: "DETECTING...", 
+        location: "Cross-Account Breach Attempt",
+        deviceType: Platform.operatingSystem,
+      );
+      
+      return; // Stops the execution dead in its tracks.
+    } 
+
+    // IF THEY ARE THE REAL OWNER, talk to the secure backend!
+    try {
+      if (actionType == 'delete') {
+        // CALL THE BACKEND!
+        await _vaultService.deleteFile(docId, fileOwnerId);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("File permanently shattered and deleted."), backgroundColor: Colors.green),
+        );
+      } 
+      else if (actionType == 'move to secret vault') {
+        // CALL THE BACKEND!
+        await _vaultService.moveFileToSecret(docId, fileOwnerId);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Payload cloaked. Moved to Secret Vault."), backgroundColor: Colors.cyan),
+        );
+      }
+    } catch (e) {
+      debugPrint("Secure Action Failed: $e");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Check if the user configured the vault to be here and hidden via Double-Tap
     bool isDoubleTapTrigger = _vaultLocation == 'Vault Section' && 
                               _vaultIsHidden && 
                               _vaultTrigger == 'Double-Tap Title';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA), // Soft background
+      backgroundColor: const Color(0xFFF5F7FA), 
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        // If they chose Double-Tap, the title becomes the trigger!
         title: GestureDetector(
           onDoubleTap: isDoubleTapTrigger ? _openSecretVault : null,
           child: const Text(
@@ -96,21 +147,18 @@ class _MainVaultScreenState extends State<MainVaultScreen> {
           ),
         ),
         actions: [
-          // 1. THE HIDDEN TRIGGER (Heart Icon)
           if (_vaultLocation == 'Vault Section' && _vaultIsHidden && _vaultTrigger == 'Heart Icon')
             IconButton(
-              icon: const Icon(Icons.favorite, color: Colors.lightBlue), // Innocent disguise!
+              icon: const Icon(Icons.favorite, color: Colors.lightBlue),
               onPressed: _openSecretVault,
             ),
           
-          // 2. THE VISIBLE ENTRANCE (If they chose NOT to hide it)
           if (_vaultLocation == 'Vault Section' && !_vaultIsHidden)
             IconButton(
               icon: const Icon(Icons.lock_outline, color: Colors.blueAccent),
               onPressed: _openSecretVault,
             ),
 
-          // 3. THE THREE-DOT MENU (To configure the vault)
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, color: Colors.lightBlue),
             onSelected: (value) {
@@ -125,7 +173,7 @@ class _MainVaultScreenState extends State<MainVaultScreen> {
               ),
             ],
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            color: Colors.lightBlue.shade50, // Styled dropdown
+            color: Colors.lightBlue.shade50, 
           ),
         ],
       ),
@@ -133,12 +181,9 @@ class _MainVaultScreenState extends State<MainVaultScreen> {
     );
   }
 
-  // ---------------------------------------------------------
-  // UI: REGULAR FILES (Using your light blue gradient aesthetic)
-  // ---------------------------------------------------------
   Widget _buildRegularFiles() {
     return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _vaultService.getVaultFiles(), // Using your regular vault_service!
+      stream: _vaultService.getVaultFiles(), 
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator(color: Colors.lightBlue));
@@ -166,7 +211,6 @@ class _MainVaultScreenState extends State<MainVaultScreen> {
               margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
-                // Light blue/white gradient for regular files
                 gradient: LinearGradient(
                   begin: Alignment.centerLeft,
                   end: Alignment.centerRight,
@@ -191,7 +235,35 @@ class _MainVaultScreenState extends State<MainVaultScreen> {
                   'Type: $fileType', 
                   style: const TextStyle(color: Colors.black54)
                 ),
-                trailing: const Icon(Icons.chevron_right, color: Colors.black26),
+                // 🔥 THE NEW MENU FOR FILES (Both actions are trapped!)
+                trailing: PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_horiz, color: Colors.black45),
+                  onSelected: (value) {
+                    _attemptSecureAction(value, file);
+                  },
+                  itemBuilder: (BuildContext context) => [
+                    const PopupMenuItem(
+                      value: 'move to secret vault',
+                      child: Row(
+                        children: [
+                          Icon(Icons.visibility_off, color: Colors.black54, size: 18),
+                          SizedBox(width: 8),
+                          Text('Cloak Payload (Move to Secret)'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
+                          SizedBox(width: 8),
+                          Text('Permanently Shatter (Delete)', style: TextStyle(color: Colors.redAccent)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
           },

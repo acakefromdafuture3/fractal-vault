@@ -1,17 +1,18 @@
 // Location: lib/screens/category_screen.dart
 
 import 'dart:io'; 
-import 'dart:typed_data'; // 🔥 Needed for the byte arrays
+import 'dart:typed_data'; 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; 
 import 'package:open_filex/open_filex.dart'; 
 import 'package:shared_preferences/shared_preferences.dart'; 
-import 'package:path_provider/path_provider.dart'; // 🔥 Needed for temporary decryption
+import 'package:path_provider/path_provider.dart'; 
+import 'package:firebase_auth/firebase_auth.dart'; // 🔥 Needed for the trap
 
 import '../services/vault_service.dart'; 
 import '../services/security_service.dart'; 
-import '../services/encryption_service.dart'; // 🔥 The Math Engine
-import '../services/cloud_dispatcher.dart';   // 🔥 The Cloud Downloader
+import '../services/encryption_service.dart'; 
+import '../services/cloud_dispatcher.dart';   
 import 'vault_setup_wizard.dart'; 
 import 'secret_vault_screen.dart'; 
 import '../widgets/doodle_background.dart';
@@ -28,7 +29,10 @@ class _CategoryScreenState extends State<CategoryScreen> {
   final VaultService _vaultService = VaultService();
   final SecurityService _securityMonitor = SecurityService(); 
   String _selectedCategoryId = 'recent'; 
-  final Set<String> _selectedDocs = {}; 
+  
+  // 🔥 UPGRADED: Now stores docId AND ownerId so we can catch hackers!
+  final Map<String, String> _selectedDocs = {}; 
+  
   Stream<List<Map<String, dynamic>>>? _vaultStream;
 
   final List<Map<String, dynamic>> _categories = [
@@ -54,7 +58,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
           final Timestamp? timeA = a['dateAdded'] as Timestamp?;
           final Timestamp? timeB = b['dateAdded'] as Timestamp?;
           if (timeA == null || timeB == null) return 0;
-          return timeB.compareTo(timeA); // Forces newest at the top
+          return timeB.compareTo(timeA); 
         });
         return sortedFiles;
       });
@@ -65,8 +69,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
     }
   }
 
-  // 🔥 UPGRADED: The true Reconstruction Engine is now here!
-  // 🔥 UPGRADED: Now with Decentralized Scavenger Hunt logic
   Future<void> _openVaultFile(Map<String, dynamic> fileData) async {
     final String fileName = fileData['name'] ?? "Unknown";
     final String fileId = fileData['docId'];
@@ -86,33 +88,26 @@ class _CategoryScreenState extends State<CategoryScreen> {
     try {
       final cloud = CloudDispatcher();
 
-      // 1. Download the Heavy File (The Burger) from Node 1
       Uint8List? encryptedBytes = await cloud.downloadEncryptedFile(fileId);
       if (encryptedBytes == null) throw Exception("Primary Node Unreachable.");
 
-      // 2. THE SCAVENGER HUNT (Step 3): Grab 3 tiny "Fry" shards from different nodes
-      // We use Future.wait to fire all requests at the same time for max speed!
       final results = await Future.wait([
-        cloud.downloadShardFromSupabase(fileId),  // Shard 0
-        cloud.downloadShardFromAppwrite(fileId),  // Shard 1
-        cloud.downloadShardFromCloudinary(fileId),// Shard 2
+        cloud.downloadShardFromSupabase(fileId),  
+        cloud.downloadShardFromAppwrite(fileId),  
+        cloud.downloadShardFromCloudinary(fileId),
         cloud.downloadShardFromLocal(fileId),
       ]);
 
-      // Filter out any failed requests
       final List<String> gatheredShards = results.whereType<String>().toList();
 
-      // We need at least 3 to solve the math puzzle (Threshold k=3)
       if (gatheredShards.length < 3) {
         throw Exception("Quorum Failed: Need 3 shards, found ${gatheredShards.length}.");
       }
 
-      // 3. Rebuild Key & Decrypt
       final crypto = EncryptionService();
       String recoveredKey = crypto.rebuildAesKey(gatheredShards);
       Uint8List plainBytes = crypto.decryptHeavyFile(encryptedBytes, recoveredKey, ivBase64);
 
-      // 4. Save to Temp Cache & Open
       final tempDir = await getTemporaryDirectory();
       final tempFile = File('${tempDir.path}/view_$fileId.$extension');
       await tempFile.writeAsBytes(plainBytes);
@@ -134,11 +129,53 @@ class _CategoryScreenState extends State<CategoryScreen> {
     }
   }
 
+  // 🔥 THE CENTRAL HONEYPOT TRAP FOR BATCH ACTIONS
+  Future<bool> _checkForIntruders(String actionTarget) async {
+    final user = FirebaseAuth.instance.currentUser;
+    bool intruderDetected = false;
+
+    // Check every single file they selected
+    for (String ownerId in _selectedDocs.values) {
+      if (user == null || user.uid != ownerId) {
+        intruderDetected = true;
+        break; // Stop checking, we caught them!
+      }
+    }
+
+    if (intruderDetected) {
+      if (mounted) {
+        setState(() => _selectedDocs.clear()); // Drop their selection instantly
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("🛑 ACCESS DENIED: Unauthorized files detected in selection."),
+            backgroundColor: Colors.redAccent,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+      
+      // Send them to the Radar!
+      await _securityMonitor.logBreachAttempt(
+        target: "MASS $actionTarget",
+        ipAddress: "DETECTING...", 
+        location: "Category Screen Breach",
+        deviceType: Platform.operatingSystem,
+      );
+      return true; // Yes, an intruder was caught
+    }
+    return false; // Safe to proceed
+  }
+
   Future<void> _deleteSelectedFiles() async {
     if (_selectedDocs.isEmpty) return;
+    
+    // 🔥 SPRING THE TRAP BEFORE DELETING
+    if (await _checkForIntruders("FILE PURGE")) return; 
+
     final int count = _selectedDocs.length;
     final batch = FirebaseFirestore.instance.batch();
-    for (String docId in _selectedDocs) {
+    for (String docId in _selectedDocs.keys) { // 🔥 Used .keys
       batch.delete(FirebaseFirestore.instance.collection('vault_files').doc(docId));
     }
     try {
@@ -154,6 +191,9 @@ class _CategoryScreenState extends State<CategoryScreen> {
   Future<void> _makeSelectedSecret() async {
     if (_selectedDocs.isEmpty) return;
     
+    // 🔥 SPRING THE TRAP BEFORE MOVING
+    if (await _checkForIntruders("VAULT CLOAKING")) return;
+
     final prefs = await SharedPreferences.getInstance();
     if (!prefs.containsKey('vaultAuthMethod')) {
       if (mounted) {
@@ -168,7 +208,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
     final int count = _selectedDocs.length;
     final batch = FirebaseFirestore.instance.batch();
     
-    for (String docId in _selectedDocs) {
+    for (String docId in _selectedDocs.keys) { // 🔥 Used .keys
       batch.update(FirebaseFirestore.instance.collection('vault_files').doc(docId), {'isSecret': true});
     }
 
@@ -185,8 +225,18 @@ class _CategoryScreenState extends State<CategoryScreen> {
     } catch (e) { debugPrint("Error: $e"); }
   }
 
-  void _toggleSelection(String docId) {
-    setState(() { _selectedDocs.contains(docId) ? _selectedDocs.remove(docId) : _selectedDocs.add(docId); });
+  // 🔥 UPGRADED SELECTION LOGIC
+  void _toggleSelection(Map<String, dynamic> file) {
+    final docId = file['docId'];
+    final ownerId = file['ownerId'] ?? "UNKNOWN";
+    
+    setState(() { 
+      if (_selectedDocs.containsKey(docId)) {
+        _selectedDocs.remove(docId);
+      } else {
+        _selectedDocs[docId] = ownerId; // Save the owner ID for the trap check!
+      }
+    });
   }
 
   List<IconData> _getCategoryDoodles() {
@@ -295,9 +345,9 @@ class _CategoryScreenState extends State<CategoryScreen> {
                         final file = files[index];
                         return TacticalFileCard(
                           file: file, colors: colors, isSelectionMode: isSelectionMode,
-                          isSelected: _selectedDocs.contains(file['docId']),
-                          onLongPress: () { if (!isSelectionMode) _toggleSelection(file['docId']); },
-                          onTap: () { isSelectionMode ? _toggleSelection(file['docId']) : _openVaultFile(file); },
+                          isSelected: _selectedDocs.containsKey(file['docId']),
+                          onLongPress: () { if (!isSelectionMode) _toggleSelection(file); },
+                          onTap: () { isSelectionMode ? _toggleSelection(file) : _openVaultFile(file); },
                         );
                       },
                     );

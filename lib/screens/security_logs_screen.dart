@@ -1,6 +1,6 @@
 // Location: lib/screens/security_logs_screen.dart
 
-import 'dart:io'; // 🔥 NEEDED FOR DEVICE OS DETECTION
+import 'dart:io'; 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart'; 
@@ -156,7 +156,6 @@ class _SecurityLogsScreenState extends State<SecurityLogsScreen> {
     );
   }
 
-  // 🔥 DYNAMIC CARD: Now recognizes ALL Hardware Spoofing traps!
   Widget _buildLogCard(Map<String, dynamic> log, {required bool isThreat}) {
     String logTime = "UNKNOWN TIME";
     if (log['timestamp'] != null && log['timestamp'] is Timestamp) {
@@ -165,20 +164,20 @@ class _SecurityLogsScreenState extends State<SecurityLogsScreen> {
 
     final String targetInfo = (log['target'] ?? "Unknown").toString().toUpperCase();
     
-    // 🔥 EXPANDED RADAR: Now catches Profile, Password, and Purge hacks!
+    // 🔥 EXPANDED RADAR: Now catches File Deletion attempts too!
     final bool isHardwareSpoofing = isThreat && (
       targetInfo.contains("PROFILE") || 
       targetInfo.contains("DOSSIER") || 
       targetInfo.contains("AVATAR") ||
       targetInfo.contains("PASSWORD") || 
       targetInfo.contains("FALLBACK") ||
-      targetInfo.contains("PURGE")
+      targetInfo.contains("PURGE") ||
+      targetInfo.contains("FILE") // 🔥 Added File Purge Detection!
     );
 
     Color themeColor = isThreat ? Colors.redAccent : Colors.greenAccent;
     IconData themeIcon = isThreat ? Icons.warning_amber_rounded : Icons.check_circle_outline;
 
-    // 🔥 Apply the deep orange hardware lock theme
     if (isHardwareSpoofing) {
       themeColor = Colors.deepOrangeAccent; 
       themeIcon = Icons.fingerprint; 
@@ -218,7 +217,6 @@ class _SecurityLogsScreenState extends State<SecurityLogsScreen> {
                   ),
                   const SizedBox(width: 10),
                   
-                  // 🔥 THE DOUBLE-TRAP SECURED DELETE BUTTON
                   GestureDetector(
                     onTap: () {
                       if (isIntruder) {
@@ -258,11 +256,10 @@ class _SecurityLogsScreenState extends State<SecurityLogsScreen> {
             child: Divider(color: Colors.white10, thickness: 1),
           ),
           
-          // 🔥 The critical warning text for hardware spoofing!
           if (isHardwareSpoofing) 
             Padding(
               padding: const EdgeInsets.only(bottom: 8.0),
-              child: Text("🚨 HARDWARE SPOOFING DETECTED", style: TextStyle(color: themeColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+              child: Text("🚨 UNAUTHORIZED ACTION DETECTED", style: TextStyle(color: themeColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
             ),
             
           _buildLogDetail("TARGET", targetInfo),
