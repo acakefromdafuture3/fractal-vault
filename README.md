@@ -133,7 +133,7 @@ graph TD
 
 **1. Clone the Repository:**
 ```bash
-git clone [https://github.com/your-username/fractal-vault.git](https://github.com/your-username/fractal-vault.git)
+git clone [https://github.com/acakefromdafuture3/fractal-vault.git](https://github.com/acakefromdafuture3/fractal-vault.git)
 cd fractal-vault
 ```
 
