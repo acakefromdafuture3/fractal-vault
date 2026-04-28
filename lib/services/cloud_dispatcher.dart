@@ -21,7 +21,6 @@ class CloudDispatcher {
   final String _appwriteProject = dotenv.env['APPWRITE_PROJECT_ID'] ?? '';
   final String _appwriteKey = dotenv.env['APPWRITE_API_KEY'] ?? '';
   final String _appwriteBucket = dotenv.env['APPWRITE_BUCKET_ID'] ?? ''; 
-
   final String _cloudinaryCloudName = dotenv.env['CLOUDINARY_CLOUD_NAME'] ?? '';
   final String _cloudinaryApiKey = dotenv.env['CLOUDINARY_API_KEY'] ?? '';
   final String _cloudinaryApiSecret = dotenv.env['CLOUDINARY_API_SECRET'] ?? '';
