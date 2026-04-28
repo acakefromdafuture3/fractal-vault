@@ -8,11 +8,18 @@
 [![Gemini AI](https://img.shields.io/badge/Gemini_2.5-8E75B2?style=for-the-badge&logo=googlebard&logoColor=white)](https://deepmind.google/technologies/gemini/)
 [![Google Solution Challenge 2026](https://img.shields.io/badge/Solution_Challenge-2026-4285F4?style=for-the-badge&logo=google&logoColor=white)](#)
 
+[![Live Web Portal](https://img.shields.io/badge/LIVE_PORTAL-OPERATIONAL-00C853?style=for-the-badge&logo=googlechrome&logoColor=white)]([https://fractal-vault.web.app/])
+
 *Built for the Google Solution Challenge 2026 by Team Dual Cortex*
 
 </div>
 
 ---
+## 🌐 Official Web Portal & Live Demo
+
+Experience the zero-knowledge architecture firsthand. Explore the system documentation, view the architectural diagrams, and download the compiled operative payload (APK) directly from our live hosted portal:
+
+🔗 **[Access the Fractal Vault Portal Here]([https://fractal-vault.web.app/])**
 
 ## 📜 1. Mission Briefing
 The modern digital landscape is plagued by "Single Point of Failure" vulnerabilities. Traditional cloud storage relies on centralized databases; if a single server is breached, or a user's password is stolen via phishing, their entire digital life is compromised. **Fractal Vault** completely eliminates this paradigm. 
