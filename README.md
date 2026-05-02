@@ -8,11 +8,18 @@
 [![Gemini AI](https://img.shields.io/badge/Gemini_2.5-8E75B2?style=for-the-badge&logo=googlebard&logoColor=white)](https://deepmind.google/technologies/gemini/)
 [![Google Solution Challenge 2026](https://img.shields.io/badge/Solution_Challenge-2026-4285F4?style=for-the-badge&logo=google&logoColor=white)](#)
 
+[![Live Web Portal](https://img.shields.io/badge/LIVE_PORTAL-OPERATIONAL-00C853?style=for-the-badge&logo=googlechrome&logoColor=white)](https://fractal-vault.web.app/)
+
 *Built for the Google Solution Challenge 2026 by Team Dual Cortex*
 
 </div>
 
 ---
+## 🌐 Official Web Portal & Live Demo
+
+Experience the zero-knowledge architecture firsthand. Explore the system documentation, view the architectural diagrams, and download the compiled operative payload (APK) directly from our live hosted portal:
+
+🔗 **[Access the Fractal Vault Portal Here](https://fractal-vault.web.app/)**
 
 ## 📜 1. Mission Briefing
 The modern digital landscape is plagued by "Single Point of Failure" vulnerabilities. Traditional cloud storage relies on centralized databases; if a single server is breached, or a user's password is stolen via phishing, their entire digital life is compromised. **Fractal Vault** completely eliminates this paradigm. 
@@ -65,7 +72,7 @@ Fractal Vault is guarded by an integrated autonomous cyber-guardian. The Sentine
 | :--- | :--- | :--- |
 | 📱 **Frontend** | ![Flutter](https://img.shields.io/badge/Flutter-%2302569B.svg?style=flat&logo=Flutter&logoColor=white) <br> **Dart** | High-performance, cross-platform UI with "Glassmorphic" terminal aesthetics and Local Cryptographic Engine execution. |
 | ☁️ **Orchestration** | ![Firebase](https://img.shields.io/badge/firebase-%23039BE5.svg?style=flat&logo=firebase) <br> **Cloud Functions** | Secure identity management, Cloud Firestore for encrypted metadata (doc_ids), and Serverless OTP delivery. |
-| 🧠 **AI Integration** | ![Gemini](https://img.shields.io/badge/Gemini-%238E75B2.svg?style=flat&logo=googlebard&logoColor=white) <br> **Gemini 1.5 Flash** | Powers the Sentinel AI via the `google_generative_ai` SDK, utilizing advanced Function Calling for system controls. |
+| 🧠 **AI Integration** | ![Gemini](https://img.shields.io/badge/Gemini-%238E75B2.svg?style=flat&logo=googlebard&logoColor=white) <br> **Gemini 2.5 Flash** | Powers the Sentinel AI via the `google_generative_ai` SDK, utilizing advanced Function Calling for system controls. |
 | 🗄️ **Storage Nodes** | ![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=flat&logo=supabase&logoColor=white) ![Appwrite](https://img.shields.io/badge/Appwrite-FD366E?style=flat&logo=appwrite&logoColor=white) <br> **Cloudinary / ImageKit** | The independent, decentralized architecture that houses the fragmented AES-256 Key shards. |
 | 🌐 **Web Presence** | ![Firebase Hosting](https://img.shields.io/badge/Firebase_Hosting-FFCA28?style=flat&logo=firebase&logoColor=black) | High-speed global deployment of the architectural landing page and project documentation. |
 
@@ -126,7 +133,7 @@ graph TD
 
 **1. Clone the Repository:**
 ```bash
-git clone [https://github.com/your-username/fractal-vault.git](https://github.com/your-username/fractal-vault.git)
+git clone [https://github.com/acakefromdafuture3/fractal-vault.git](https://github.com/acakefromdafuture3/fractal-vault.git)
 cd fractal-vault
 ```
 
@@ -159,7 +166,7 @@ flutter run
 
 ---
 
-## 👥 The Operators (Team Parallel Minds)
+## 👥 The Operators (Team Dual Cortex)
 
 * **Ritankar Bose** - *Lead Architect & Cryptography Developer*
 * **Rani Bhattacharjee** - *Frontend Systems & UX Integration*
