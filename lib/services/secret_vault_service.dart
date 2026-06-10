@@ -1,13 +1,21 @@
+// Location: lib/services/secret_vault_service.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // 🔥 NEEDED FOR IDENTITY
 
 class SecretVaultService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  // ONLY fetches files where isSecret is TRUE
+  // Fetches ONLY files where isSecret is TRUE, belongs to YOU, and isn't PURGED
   Stream<List<Map<String, dynamic>>> getSecretFiles() {
+    final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
+
     return _db
         .collection('vault_files')
+        .where('ownerId', isEqualTo: currentUserId) // 🔐 SATISFIES THE FIRESTORE RULE
         .where('isSecret', isEqualTo: true) // 🔒 THE VIP FILTER
+        .where('status', isNotEqualTo: 'PURGED') // 👻 PATH B: HIDES DESTROYED FILES
+        .orderBy('status') // 🔥 REQUIRED BY FIRESTORE FOR isNotEqualTo
         .orderBy('dateAdded', descending: true)
         .snapshots()
         .map((snapshot) {
