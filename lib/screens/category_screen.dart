@@ -126,7 +126,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
     } catch (e) {
       debugPrint("Decryption Error: $e");
       await _securityMonitor.logBreachAttempt(
-        target: fileName, ipAddress: "HOSTILE IP", location: "Unknown Origin", deviceType: "Brute Force Tool",
+        target: fileName,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("CRASH: $e"), backgroundColor: Colors.redAccent));
