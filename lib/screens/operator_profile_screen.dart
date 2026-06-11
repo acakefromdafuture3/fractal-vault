@@ -80,10 +80,7 @@ class _OperatorProfileScreenState extends State<OperatorProfileScreen> {
       
       // 🚨 CALLING RITANKAR'S ACTUAL BREACH PROTOCOL!
       SecurityService().logBreachAttempt(
-        target: "OPERATOR DOSSIER AVATAR", // Triggers the orange UI in the logs
-        ipAddress: "DETECTING...", 
-        location: "Hardware Mismatch",
-        deviceType: Platform.operatingSystem, 
+        target: "OPERATOR DOSSIER AVATAR", // Triggers the orange UI in the logs 
       );
       
       return; // BLOCKS THE CLICK ENTIRELY
@@ -178,9 +175,6 @@ class _OperatorProfileScreenState extends State<OperatorProfileScreen> {
       // 🚨 LOG THE THREAT TO FIREBASE!
       SecurityService().logBreachAttempt(
         target: "EMERGENCY FALLBACK PASSWORD", // The target is the override system
-        ipAddress: "DETECTING...", 
-        location: "Hardware Mismatch",
-        deviceType: Platform.operatingSystem, 
       );
 
       // Clear their fake password and slam the menu shut!

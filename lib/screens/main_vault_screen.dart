@@ -97,9 +97,6 @@ class _MainVaultScreenState extends State<MainVaultScreen> {
 
       _securityService.logBreachAttempt(
         target: "UNAUTHORIZED FILE ${actionType.toUpperCase()}: ${fileData['name']}",
-        ipAddress: "DETECTING...", 
-        location: "Cross-Account Breach Attempt",
-        deviceType: Platform.operatingSystem,
       );
       
       return; // Stops the execution dead in its tracks.
