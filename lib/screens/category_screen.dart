@@ -28,16 +28,12 @@ class _CategoryScreenState extends State<CategoryScreen> {
   final VaultService _vaultService = VaultService();
   final SecurityService _securityMonitor = SecurityService(); 
   String _selectedCategoryId = 'recent'; 
-<<<<<<< Updated upstream
-  final Set<String> _selectedDocs = {}; 
-=======
   
   // 🔥 FIX 1: Upgraded to store the complete file map per selected doc.
   // This gives _deleteSelectedFiles access to BOTH ownerId AND deletion_hash
   // without any extra Firestore round-trips — the data is already in memory.
   final Map<String, Map<String, dynamic>> _selectedDocs = {};
   
->>>>>>> Stashed changes
   Stream<List<Map<String, dynamic>>>? _vaultStream;
 
   final List<Map<String, dynamic>> _categories = [
@@ -144,15 +140,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
     }
   }
 
-<<<<<<< Updated upstream
-  Future<void> _deleteSelectedFiles() async {
-    if (_selectedDocs.isEmpty) return;
-    final int count = _selectedDocs.length;
-    final batch = FirebaseFirestore.instance.batch();
-    for (String docId in _selectedDocs) {
-      batch.delete(FirebaseFirestore.instance.collection('vault_files').doc(docId));
-    }
-=======
   // 🔥 FIX 2: THE HONEYPOT TRAP
   // This prevents the UI from glitching by stopping the action before it hits the server
   Future<bool> _checkForIntruders(String actionTarget) async {
@@ -266,7 +253,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
     debugPrint("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     debugPrint("🚀 [BANISHMENT] Committing batch to Firestore...");
 
->>>>>>> Stashed changes
     try {
       await batch.commit();
       debugPrint("✅ [BANISHMENT] Batch committed. $count record(s) PURGED.");
@@ -299,9 +285,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
           duration: const Duration(seconds: 6),
         ));
       }
-<<<<<<< Updated upstream
-    } catch (e) { debugPrint("Error: $e"); }
-=======
     } catch (e) { 
       // Catch-all for non-Firebase errors (network timeouts, etc.)
       debugPrint("🚨 [BANISHMENT] Unexpected error: $e");
@@ -318,7 +301,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
         );
       }
     }
->>>>>>> Stashed changes
   }
 
   Future<void> _makeSelectedSecret() async {
@@ -355,10 +337,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
     } catch (e) { debugPrint("Error: $e"); }
   }
 
-<<<<<<< Updated upstream
-  void _toggleSelection(String docId) {
-    setState(() { _selectedDocs.contains(docId) ? _selectedDocs.remove(docId) : _selectedDocs.add(docId); });
-=======
   // 🔥 FIX 5: UPDATED TOGGLE LOGIC — stores the complete file map.
   // This is what gives _deleteSelectedFiles its deletion_hash without
   // any extra Firestore reads at purge time.
@@ -373,7 +351,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
         _selectedDocs[docId] = Map<String, dynamic>.from(file);
       }
     });
->>>>>>> Stashed changes
   }
 
   List<IconData> _getCategoryDoodles() {
