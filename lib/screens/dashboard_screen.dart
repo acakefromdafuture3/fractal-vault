@@ -162,6 +162,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _pickAndSecureFiles(ColorScheme colors, {required bool isMultiple}) async {
+    // 🔥 FIX 1: The Safety Switch
+    bool isDialogShowing = false; 
+
     try {
       final FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -177,11 +180,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       setState(() => _isProcessing = true);
 
+      // Now we explicitly mark that the dialog is on screen
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (context) => const ShardingAnimationDialog(),
       );
+      isDialogShowing = true; 
 
       await Future.delayed(const Duration(milliseconds: 600));
 
@@ -210,16 +215,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
 
       if (mounted) {
-        Navigator.pop(context);
+        // Safely pop only if the dialog is actually showing
+        if (isDialogShowing && Navigator.canPop(context)) {
+          Navigator.pop(context);
+          isDialogShowing = false;
+        }
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('${result.files.length} File(s) Secured & Shattered!'),
           backgroundColor: Colors.green,
         ));
       }
     } catch (e) {
-      if (mounted) Navigator.pop(context);
       debugPrint('Error: $e');
       if (mounted) {
+        // Safely pop only if the dialog is actually showing
+        if (isDialogShowing && Navigator.canPop(context)) {
+          Navigator.pop(context);
+          isDialogShowing = false;
+        }
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Encryption Error: $e'),
           backgroundColor: Colors.redAccent,
@@ -324,13 +337,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 /// Passes live threat metrics down to [HomeScreen] without requiring
 /// HomeScreen to manage its own Firestore subscription.
-///
-/// Usage in HomeScreen:
-/// ```dart
-/// final metrics = DashboardMetrics.of(context);
-/// final threatCount = metrics.threatCount;
-/// final isBreached = metrics.threatCount > 0;
-/// ```
 class DashboardMetrics extends InheritedWidget {
   final int threatCount;
   final int totalLogCount;
@@ -354,7 +360,7 @@ class DashboardMetrics extends InheritedWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// SHARDING ANIMATION DIALOG (unchanged)
+// SHARDING ANIMATION DIALOG
 // ─────────────────────────────────────────────────────────────────
 
 class ShardingAnimationDialog extends StatefulWidget {
@@ -405,96 +411,101 @@ class _ShardingAnimationDialogState extends State<ShardingAnimationDialog>
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      child: Container(
-        padding: const EdgeInsets.all(30),
-        decoration: BoxDecoration(
-          color: const Color(0xFF0A1526).withOpacity(0.95),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFF90CAFF), width: 1.5),
-          boxShadow: [
-            BoxShadow(
-                color: const Color(0xFF90CAFF).withOpacity(0.4),
-                blurRadius: 30,
-                spreadRadius: 5)
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              height: 100,
-              width: 100,
-              child: AnimatedBuilder(
-                animation: _shardController,
-                builder: (context, child) {
-                  final double progress = _explodeProgress.value;
-                  final double fileOpacity =
-                      1.0 - (progress * 3).clamp(0.0, 1.0);
-                  final double shardOpacity =
-                      progress < 0.1 ? (progress * 10) : (1.0 - progress);
-                  final double distance = progress * 45.0;
+    // 🔥 FIX 2: WillPopScope disables the hardware back button while uploading!
+    // (Note: If using strict Flutter 3.12+, you can swap this for PopScope(canPop: false, child: ...))
+    return WillPopScope(
+      onWillPop: () async => false,
+      child: Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: Container(
+          padding: const EdgeInsets.all(30),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0A1526).withOpacity(0.95),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFF90CAFF), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                  color: const Color(0xFF90CAFF).withOpacity(0.4),
+                  blurRadius: 30,
+                  spreadRadius: 5)
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                height: 100,
+                width: 100,
+                child: AnimatedBuilder(
+                  animation: _shardController,
+                  builder: (context, child) {
+                    final double progress = _explodeProgress.value;
+                    final double fileOpacity =
+                        1.0 - (progress * 3).clamp(0.0, 1.0);
+                    final double shardOpacity =
+                        progress < 0.1 ? (progress * 10) : (1.0 - progress);
+                    final double distance = progress * 45.0;
 
-                  return Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      ...List.generate(5, (index) {
-                        final double angle =
-                            (index * (360 / 5)) * (math.pi / 180);
-                        final double dx = math.cos(angle) * distance;
-                        final double dy = math.sin(angle) * distance;
+                    return Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        ...List.generate(5, (index) {
+                          final double angle =
+                              (index * (360 / 5)) * (math.pi / 180);
+                          final double dx = math.cos(angle) * distance;
+                          final double dy = math.sin(angle) * distance;
 
-                        return Transform.translate(
-                          offset: Offset(dx, dy),
-                          child: Opacity(
-                            opacity: shardOpacity,
-                            child: Transform.rotate(
-                              angle: progress * math.pi * 3,
-                              child: const Icon(Icons.change_history,
-                                  color: Color(0xFF90CAFF), size: 24),
+                          return Transform.translate(
+                            offset: Offset(dx, dy),
+                            child: Opacity(
+                              opacity: shardOpacity,
+                              child: Transform.rotate(
+                                angle: progress * math.pi * 3,
+                                child: const Icon(Icons.change_history,
+                                    color: Color(0xFF90CAFF), size: 24),
+                              ),
                             ),
+                          );
+                        }),
+                        Transform.scale(
+                          scale: 1.0 - (progress * 0.4),
+                          child: Opacity(
+                            opacity: fileOpacity,
+                            child: const Icon(Icons.insert_drive_file,
+                                color: Colors.white, size: 50),
                           ),
-                        );
-                      }),
-                      Transform.scale(
-                        scale: 1.0 - (progress * 0.4),
-                        child: Opacity(
-                          opacity: fileOpacity,
-                          child: const Icon(Icons.insert_drive_file,
-                              color: Colors.white, size: 50),
                         ),
-                      ),
-                    ],
-                  );
-                },
+                      ],
+                    );
+                  },
+                ),
               ),
-            ),
-            const SizedBox(height: 15),
-            const Text('FRACTAL SHARDING',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 2.0,
-                    fontSize: 16)),
-            const SizedBox(height: 15),
-            Text(_statusText,
-                style: const TextStyle(
-                    color: Colors.greenAccent,
-                    fontFamily: 'Courier',
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center),
-            const SizedBox(height: 25),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: const LinearProgressIndicator(
-                  backgroundColor: Colors.white10,
-                  color: Color(0xFF90CAFF),
-                  minHeight: 4),
-            ),
-          ],
+              const SizedBox(height: 15),
+              const Text('FRACTAL SHARDING',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 2.0,
+                      fontSize: 16)),
+              const SizedBox(height: 15),
+              Text(_statusText,
+                  style: const TextStyle(
+                      color: Colors.greenAccent,
+                      fontFamily: 'Courier',
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center),
+              const SizedBox(height: 25),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: const LinearProgressIndicator(
+                    backgroundColor: Colors.white10,
+                    color: Color(0xFF90CAFF),
+                    minHeight: 4),
+              ),
+            ],
+          ),
         ),
       ),
     );
