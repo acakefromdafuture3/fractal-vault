@@ -154,12 +154,22 @@ class _SecurityLogsScreenState extends State<SecurityLogsScreen> {
   Widget _buildLogList(List<Map<String, dynamic>> logs, {required bool isThreat}) {
     if (logs.isEmpty) {
       return Center(
-        child: Text(
-          isThreat ? 'NO THREATS DETECTED.' : 'NO AUTHORIZED ACCESS LOGS.',
-          style: const TextStyle(
-            color: Colors.white54,
-            letterSpacing: 2,
-            fontFamily: 'Courier',
+        // 🔥 FIX: Wrapped the empty text in a dark glass pill so it's readable on white!
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0D2137).withOpacity(0.85),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFF90CAFF).withOpacity(0.3)),
+          ),
+          child: Text(
+            isThreat ? 'NO THREATS DETECTED.' : 'NO AUTHORIZED ACCESS LOGS.',
+            style: const TextStyle(
+              color: Colors.white70,
+              letterSpacing: 2,
+              fontFamily: 'Courier',
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
       );
@@ -210,12 +220,20 @@ class _SecurityLogsScreenState extends State<SecurityLogsScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: themeColor.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(10),
+        // 🔥 FIX: The Obsidian Dark Glass background. This makes white text pop everywhere!
+        color: const Color(0xFF0B1A2A).withOpacity(0.95), 
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: themeColor.withOpacity(isHighSeverity ? 0.8 : 0.3),
+          color: themeColor.withOpacity(isHighSeverity ? 0.8 : 0.4),
           width: isHighSeverity ? 2 : 1,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: themeColor.withOpacity(isHighSeverity ? 0.2 : 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
