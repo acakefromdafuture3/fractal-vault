@@ -1,10 +1,8 @@
 // Location: lib/screens/security_logs_screen.dart
 
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/security_service.dart';
 import '../widgets/doodle_background.dart';
@@ -20,24 +18,20 @@ class _SecurityLogsScreenState extends State<SecurityLogsScreen> {
   final SecurityService _securityService = SecurityService();
   final user = FirebaseAuth.instance.currentUser;
 
-  String _hardwareOwnerUid = '';
+  // Tri-state: null = not yet checked, true = owner, false = intruder
+  bool? _isHardwareOwner;
 
   @override
   void initState() {
     super.initState();
-    _loadHardwareLock();
+    _checkHardwareOwnership();
   }
 
-  Future<void> _loadHardwareLock() async {
-    final prefs = await SharedPreferences.getInstance();
-    String? savedOwner = prefs.getString('hardware_owner_uid');
-
-    if (savedOwner == null) {
-      savedOwner = user?.uid ?? 'UNKNOWN';
-      await prefs.setString('hardware_owner_uid', savedOwner);
-    }
-
-    setState(() => _hardwareOwnerUid = savedOwner!);
+  Future<void> _checkHardwareOwnership() async {
+    // verifyHardwareOwnership() is the single source of truth —
+    // it also handles first-run registration automatically.
+    final isOwner = await _securityService.verifyHardwareOwnership();
+    if (mounted) setState(() => _isHardwareOwner = isOwner);
   }
 
   @override
@@ -48,7 +42,6 @@ class _SecurityLogsScreenState extends State<SecurityLogsScreen> {
       length: 2,
       child: Stack(
         children: [
-          // Background gradient
           Container(
             height: double.infinity,
             width: double.infinity,
@@ -87,7 +80,6 @@ class _SecurityLogsScreenState extends State<SecurityLogsScreen> {
 
                 const SizedBox(height: 20),
 
-                // Tab bar
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 20),
                   decoration: BoxDecoration(
@@ -185,7 +177,6 @@ class _SecurityLogsScreenState extends State<SecurityLogsScreen> {
   // ─────────────────────────────────────────────────────────────────
 
   Widget _buildLogCard(Map<String, dynamic> log, {required bool isThreat}) {
-    // Timestamp formatting
     String logTime = 'UNKNOWN TIME';
     if (log['timestamp'] != null && log['timestamp'] is Timestamp) {
       logTime = (log['timestamp'] as Timestamp).toDate().toString().split('.')[0];
@@ -193,7 +184,6 @@ class _SecurityLogsScreenState extends State<SecurityLogsScreen> {
 
     final String targetInfo = (log['target'] ?? 'Unknown').toString().toUpperCase();
 
-    // High-severity flag: attempts against sensitive targets
     final bool isHighSeverity = isThreat && (
       targetInfo.contains('PROFILE') ||
       targetInfo.contains('DOSSIER') ||
@@ -212,8 +202,9 @@ class _SecurityLogsScreenState extends State<SecurityLogsScreen> {
       themeIcon = Icons.fingerprint;
     }
 
-    final bool isIntruder =
-        user?.uid != _hardwareOwnerUid && _hardwareOwnerUid.isNotEmpty;
+    // _isHardwareOwner is null while the async check is in flight.
+    // Treat null as intruder (deny by default) until confirmed.
+    final bool isIntruder = _isHardwareOwner != true;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -229,7 +220,6 @@ class _SecurityLogsScreenState extends State<SecurityLogsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header row: status badge + timestamp + delete/lock icon
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -260,7 +250,10 @@ class _SecurityLogsScreenState extends State<SecurityLogsScreen> {
                   ),
                   const SizedBox(width: 10),
                   GestureDetector(
-                    onTap: () => _handleDeleteTap(log, isIntruder),
+                    // ✅ BUG 3 FIX: hardware lock now guards ALL log types,
+                    // not just threat logs. Authorized log deletion is
+                    // equally restricted to the original hardware owner.
+                    onTap: () => _handleDeleteTap(log),
                     child: Icon(
                       isIntruder ? Icons.lock_outline : Icons.delete_outline,
                       color: isIntruder ? Colors.redAccent : Colors.white38,
@@ -291,14 +284,12 @@ class _SecurityLogsScreenState extends State<SecurityLogsScreen> {
               ),
             ),
 
-          // ── Core fields ──────────────────────────────────────────
           _buildLogDetail('TARGET', targetInfo),
           _buildLogDetail('IP ADDRESS', log['ipAddress'] ?? '0.0.0.0'),
           _buildLogDetail('LOCATION', log['location'] ?? 'Unknown Origin'),
           _buildLogDetail('DEVICE', log['deviceType'] ?? 'Unidentified'),
 
-          // 🛰️ NEW: ISP / carrier field — only meaningful on threat logs
-          if (isThreat && log['isp'] != null && (log['isp'] as String).isNotEmpty)
+          if (log['isp'] != null && (log['isp'] as String).isNotEmpty)
             _buildLogDetail('ISP', log['isp'] as String),
 
           if (!isThreat && log['accessedBy'] != null)
@@ -312,14 +303,16 @@ class _SecurityLogsScreenState extends State<SecurityLogsScreen> {
   // DELETE / HARDWARE-LOCK HANDLER
   // ─────────────────────────────────────────────────────────────────
 
-  /// Handles the delete icon tap.
+  /// Guards deletion of both authorized and threat logs.
   ///
-  /// If the current device is NOT the original hardware owner, the action
-  /// is blocked and itself logged as a breach attempt. TelemetryService
-  /// inside [SecurityService.logBreachAttempt] will resolve the real IP
-  /// and device fingerprint automatically — no parameters needed here.
-  Future<void> _handleDeleteTap(Map<String, dynamic> log, bool isIntruder) async {
-    if (isIntruder) {
+  /// Uses [SecurityService.verifyHardwareOwnership] as the canonical
+  /// check. If the device fails, the attempt is itself logged as a
+  /// breach with target 'LOG PURGE BYPASS'.
+  Future<void> _handleDeleteTap(Map<String, dynamic> log) async {
+    final isOwner = await _securityService.verifyHardwareOwnership();
+
+    if (!isOwner) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('🛑 ACCESS DENIED: Log scrubbing restricted to original hardware.'),
@@ -328,10 +321,8 @@ class _SecurityLogsScreenState extends State<SecurityLogsScreen> {
         ),
       );
 
-      // 🛰️ logBreachAttempt() now resolves real IP/geo/device internally.
-      await _securityService.logBreachAttempt(
-        target: 'SYSTEM LOGS PURGE',
-      );
+      // Log the bypass attempt itself as a breach.
+      await _securityService.logBreachAttempt(target: 'LOG PURGE BYPASS');
     } else {
       if (log['logId'] != null) {
         await _securityService.deleteSecurityLog(log['logId'] as String);
