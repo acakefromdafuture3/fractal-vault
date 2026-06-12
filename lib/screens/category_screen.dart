@@ -124,35 +124,8 @@ class _CategoryScreenState extends State<CategoryScreen> {
     }
   }
 
-  Future<bool> _checkForIntruders(String actionTarget) async {
-    final user = FirebaseAuth.instance.currentUser;
-    bool intruderDetected = false;
-
-    for (String ownerId in _selectedDocs.values) {
-      if (ownerId == "UNKNOWN") continue; 
-
-      if (user == null || user.uid != ownerId) {
-        intruderDetected = true;
-        break; 
-      }
-    }
-
-    if (intruderDetected) {
-      if (mounted) {
-        setState(() => _selectedDocs.clear()); 
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("🛑 ACCESS DENIED: Unauthorized files detected."), backgroundColor: Colors.redAccent, duration: Duration(seconds: 4)),
-        );
-      }
-      await _securityMonitor.logBreachAttempt(target: "MASS $actionTarget");
-      return true; 
-    }
-    return false; 
-  }
-
-  // 🔥 FIX 2: THE HONEYPOT TRAP
-  // This prevents the UI from glitching by stopping the action before it hits the server
+  // 🔥 THE HONEYPOT TRAP
+  // Prevents the UI from glitching by stopping the action before it hits the server.
   Future<bool> _checkForIntruders(String actionTarget) async {
     final user = FirebaseAuth.instance.currentUser;
     bool intruderDetected = false;
