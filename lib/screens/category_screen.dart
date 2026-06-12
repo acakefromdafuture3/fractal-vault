@@ -71,24 +71,12 @@ class _CategoryScreenState extends State<CategoryScreen> {
     }
   }
 
-  // 🔥 THE UPGRADED RECONSTRUCTION ENGINE
   Future<void> _openVaultFile(Map<String, dynamic> fileData) async {
     final String fileName = fileData['name'] ?? "Unknown";
-    final String fileId = fileData['docId'] ?? "";
-    final String ivBase64 = fileData['iv'] ?? "";
-    final String extension = fileData['extension'] ?? "txt";
-    final String ownerId = fileData['ownerId'] ?? "UNKNOWN";
-
-    final user = FirebaseAuth.instance.currentUser;
-
-    // 🛑 1. FRONT DOOR HACKER CHECK
-    // If the UIDs don't match, slam the door before downloading anything!
-    if (user == null || user.uid != ownerId) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("🛑 ACCESS DENIED: Clearance required."), backgroundColor: Colors.redAccent));
-      await _securityMonitor.logBreachAttempt(target: "UNAUTHORIZED DECRYPTION: $fileName");
-      return;
-    }
-
+    final String fileId = fileData['docId'];
+    final String ivBase64 = fileData['iv'];
+    final String extension = fileData['extension'];
+    
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Row(children: [
@@ -101,72 +89,48 @@ class _CategoryScreenState extends State<CategoryScreen> {
 
     try {
       final cloud = CloudDispatcher();
+      Uint8List? encryptedBytes = await cloud.downloadEncryptedFile(fileId);
+      if (encryptedBytes == null) throw Exception("Primary Node Unreachable.");
 
-      // 🍔 2. DOWNLOAD THE BURGER (The heavy encrypted file)
-      Uint8List? encryptedBytes;
-      try {
-        encryptedBytes = await cloud.downloadEncryptedFile(fileId);
-      } catch (e) {
-        throw Exception("Node 1 (Storage) is unreachable. File missing.");
-      }
-      if (encryptedBytes == null) throw Exception("Primary payload returned null.");
-
-      // 🍟 3. THE RESILIENT SCAVENGER HUNT
-      // Notice the .catchError! If one node dies, it returns null instead of crashing the app.
       final results = await Future.wait([
-        cloud.downloadShardFromSupabase(fileId).catchError((_) => null),  
+        cloud.downloadShardFromSupabase(fileId).catchError((_) => null), 
         cloud.downloadShardFromAppwrite(fileId).catchError((_) => null),  
         cloud.downloadShardFromCloudinary(fileId).catchError((_) => null),
         cloud.downloadShardFromLocal(fileId).catchError((_) => null),
       ]);
 
-      // Filter out all the nulls (the failed nodes)
       final List<String> gatheredShards = results.whereType<String>().toList();
 
       if (gatheredShards.length < 3) {
-        throw Exception("Quorum Failed: Need 3 shards, only found ${gatheredShards.length}. Check Node connections!");
+        throw Exception("Quorum Failed: Need 3 shards, found ${gatheredShards.length}.");
       }
 
-      // 🔑 4. REBUILD & DECRYPT
       final crypto = EncryptionService();
       String recoveredKey = crypto.rebuildAesKey(gatheredShards);
       Uint8List plainBytes = crypto.decryptHeavyFile(encryptedBytes, recoveredKey, ivBase64);
 
-      // 📂 5. OPEN FILE
       final tempDir = await getTemporaryDirectory();
       final tempFile = File('${tempDir.path}/view_$fileId.$extension');
       await tempFile.writeAsBytes(plainBytes);
 
-      await _securityMonitor.logAuthorizedAccess(
-        target: fileName,
-        accessedBy: user.email ?? "Verified User",
-      );
-
-      final openResult = await OpenFilex.open(tempFile.path);
-      if (openResult.type != ResultType.done) {
-        throw Exception("Device does not have an app to open .$extension files.");
-      }
+      await _securityMonitor.logAuthorizedAccess(target: fileName, accessedBy: FirebaseAuth.instance.currentUser?.email ?? "Unknown");
+      await OpenFilex.open(tempFile.path);
 
     } catch (e) {
-      debugPrint("System Decryption Error: $e");
-      // 🔥 Notice we removed the Hacker Log here. A broken download is a system bug, not a hacker!
+      debugPrint("Decryption Error: $e");
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("🚨 SYSTEM ERROR: $e"), 
-          backgroundColor: Colors.deepOrangeAccent,
-          duration: const Duration(seconds: 5),
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("CRASH: $e"), backgroundColor: Colors.redAccent));
       }
     }
   }
 
-  // 🔥 FIX 2: THE HONEYPOT TRAP
-  // This prevents the UI from glitching by stopping the action before it hits the server
   Future<bool> _checkForIntruders(String actionTarget) async {
     final user = FirebaseAuth.instance.currentUser;
     bool intruderDetected = false;
 
     for (String ownerId in _selectedDocs.values) {
+      if (ownerId == "UNKNOWN") continue; 
+
       if (user == null || user.uid != ownerId) {
         intruderDetected = true;
         break; 
@@ -175,17 +139,12 @@ class _CategoryScreenState extends State<CategoryScreen> {
 
     if (intruderDetected) {
       if (mounted) {
-        setState(() => _selectedDocs.clear()); // Instantly clear selection so UI doesn't glitch!
+        setState(() => _selectedDocs.clear()); 
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("🛑 ACCESS DENIED: Unauthorized files detected in selection."),
-            backgroundColor: Colors.redAccent,
-            duration: Duration(seconds: 4),
-          ),
+          const SnackBar(content: Text("🛑 ACCESS DENIED: Unauthorized files detected."), backgroundColor: Colors.redAccent, duration: Duration(seconds: 4)),
         );
       }
-      
       await _securityMonitor.logBreachAttempt(target: "MASS $actionTarget");
       return true; 
     }
@@ -355,19 +314,14 @@ class _CategoryScreenState extends State<CategoryScreen> {
     }
   }
 
-  // 🔥 FIX 4: BULLETPROOF SECRET MOVE WITH SERVER-ERROR HANDLING
   Future<void> _makeSelectedSecret() async {
     if (_selectedDocs.isEmpty) return;
-    
     if (await _checkForIntruders("VAULT CLOAKING")) return;
 
     final prefs = await SharedPreferences.getInstance();
     if (!prefs.containsKey('vaultAuthMethod')) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text("Please configure your Secret Vault first!"), 
-          backgroundColor: Colors.orangeAccent, behavior: SnackBarBehavior.floating
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please configure your Secret Vault first!"), backgroundColor: Colors.orangeAccent, behavior: SnackBarBehavior.floating));
       }
       return;
     }
@@ -384,28 +338,11 @@ class _CategoryScreenState extends State<CategoryScreen> {
       if (mounted) {
         setState(() => _selectedDocs.clear()); 
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("SECURED: $count files moved to Secret Vault."), 
-          backgroundColor: Colors.deepPurpleAccent, behavior: SnackBarBehavior.floating
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("SECURED: $count files moved to Secret Vault."), backgroundColor: Colors.deepPurpleAccent, behavior: SnackBarBehavior.floating));
       }
-    } catch (e) { 
-      debugPrint("Server Error: $e"); 
-      if (mounted) {
-        setState(() => _selectedDocs.clear()); // Drop selection on server reject
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("🚨 DATABASE FIREWALL: Server blocked unauthorized cloaking attempt."), 
-            backgroundColor: Colors.deepOrangeAccent, 
-            behavior: SnackBarBehavior.floating
-          )
-        );
-      }
-    }
+    } catch (e) { debugPrint("Error: $e"); }
   }
 
-  // 🔥 FIX 5: UPDATED TOGGLE LOGIC TO CAPTURE OWNER ID
   void _toggleSelection(Map<String, dynamic> file) {
     final docId = file['docId'];
     final ownerId = file['ownerId'] ?? "UNKNOWN";
@@ -439,10 +376,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
         content: const Text("This will remove your security configuration. All currently hidden files will be safely moved back to the public dashboard.", style: TextStyle(color: Colors.white70)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("CANCEL", style: TextStyle(color: Colors.white54))),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true), 
-            child: const Text("DESTROY VAULT", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("DESTROY VAULT", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
         ],
       ),
     );
@@ -460,10 +394,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
       await batch.commit();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text("Vault Destroyed. Files moved to public dashboard."), 
-          backgroundColor: Colors.green, behavior: SnackBarBehavior.floating
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Vault Destroyed. Files moved to public dashboard."), backgroundColor: Colors.green, behavior: SnackBarBehavior.floating));
       }
     }
   }
@@ -526,7 +457,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
                         return TacticalFileCard(
                           file: file, colors: colors, isSelectionMode: isSelectionMode,
                           isSelected: _selectedDocs.containsKey(file['docId']),
-                          // 🔥 Passed the entire file object so we can read the owner!
                           onLongPress: () { if (!isSelectionMode) _toggleSelection(file); },
                           onTap: () { isSelectionMode ? _toggleSelection(file) : _openVaultFile(file); },
                         );
@@ -563,23 +493,14 @@ class _CategoryScreenState extends State<CategoryScreen> {
             final vaultExists = prefs.containsKey('vaultAuthMethod'); 
 
             if (value == 'setup') {
-              if (vaultExists && mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("You already have one secret vault!"), backgroundColor: Colors.orangeAccent, behavior: SnackBarBehavior.floating));
-              } else if (mounted) {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const VaultSetupWizard()));
-              }
+              if (vaultExists && mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("You already have one secret vault!"), backgroundColor: Colors.orangeAccent, behavior: SnackBarBehavior.floating));
+              else if (mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const VaultSetupWizard()));
             } else if (value == 'access') {
-              if (!vaultExists && mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please configure a secret vault first!"), backgroundColor: Colors.orangeAccent, behavior: SnackBarBehavior.floating));
-              } else if (mounted) {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const SecretVaultScreen()));
-              }
+              if (!vaultExists && mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please configure a secret vault first!"), backgroundColor: Colors.orangeAccent, behavior: SnackBarBehavior.floating));
+              else if (mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const SecretVaultScreen()));
             } else if (value == 'delete') {
-              if (!vaultExists && mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No vault exists to delete!"), backgroundColor: Colors.orangeAccent, behavior: SnackBarBehavior.floating));
-              } else if (mounted) {
-                _deleteSecretVault();
-              }
+              if (!vaultExists && mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No vault exists to delete!"), backgroundColor: Colors.orangeAccent, behavior: SnackBarBehavior.floating));
+              else if (mounted) _deleteSecretVault();
             }
           },
           itemBuilder: (context) => [
