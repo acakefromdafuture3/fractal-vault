@@ -28,7 +28,16 @@ class _CategoryScreenState extends State<CategoryScreen> {
   final VaultService _vaultService = VaultService();
   final SecurityService _securityMonitor = SecurityService(); 
   String _selectedCategoryId = 'recent'; 
+<<<<<<< Updated upstream
   final Set<String> _selectedDocs = {}; 
+=======
+  
+  // 🔥 FIX 1: Upgraded to store the complete file map per selected doc.
+  // This gives _deleteSelectedFiles access to BOTH ownerId AND deletion_hash
+  // without any extra Firestore round-trips — the data is already in memory.
+  final Map<String, Map<String, dynamic>> _selectedDocs = {};
+  
+>>>>>>> Stashed changes
   Stream<List<Map<String, dynamic>>>? _vaultStream;
 
   final List<Map<String, dynamic>> _categories = [
@@ -135,6 +144,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
     }
   }
 
+<<<<<<< Updated upstream
   Future<void> _deleteSelectedFiles() async {
     if (_selectedDocs.isEmpty) return;
     final int count = _selectedDocs.length;
@@ -142,14 +152,173 @@ class _CategoryScreenState extends State<CategoryScreen> {
     for (String docId in _selectedDocs) {
       batch.delete(FirebaseFirestore.instance.collection('vault_files').doc(docId));
     }
+=======
+  // 🔥 FIX 2: THE HONEYPOT TRAP
+  // This prevents the UI from glitching by stopping the action before it hits the server
+  Future<bool> _checkForIntruders(String actionTarget) async {
+    final user = FirebaseAuth.instance.currentUser;
+    bool intruderDetected = false;
+
+    // Values are now full file maps — extract ownerId from each one.
+    for (final fileMap in _selectedDocs.values) {
+      final String ownerId = fileMap['ownerId'] ?? "UNKNOWN";
+      if (user == null || user.uid != ownerId) {
+        intruderDetected = true;
+        break; 
+      }
+    }
+
+    if (intruderDetected) {
+      if (mounted) {
+        setState(() => _selectedDocs.clear()); // Instantly clear selection so UI doesn't glitch!
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("🛑 ACCESS DENIED: Unauthorized files detected in selection."),
+            backgroundColor: Colors.redAccent,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+      
+      await _securityMonitor.logBreachAttempt(target: "MASS $actionTarget");
+      return true; 
+    }
+    return false; 
+  }
+
+  // 🔥 FIX 3: ZERO-KNOWLEDGE BANISHMENT — PATH B PROTOCOL
+  // Executes the cryptographic handshake demanded by the Firestore rule:
+  //   status == "PURGED" && provided_hash == resource.data.deletion_hash
+  Future<void> _deleteSelectedFiles() async {
+    if (_selectedDocs.isEmpty) return;
+    
+    // Client-side ownership trap fires first — never hit the server with dirty data.
+    if (await _checkForIntruders("FILE PURGE")) return; 
+
+    // ─── LEGACY FILE DETECTION PASS ───────────────────────────────────────────
+    // Before building the batch, check whether any selected file is a legacy
+    // test file that was uploaded before the deletion_hash field existed.
+    // If found, abort the entire operation and inform the user.
+    final List<String> legacyFileNames = [];
+    for (final entry in _selectedDocs.entries) {
+      final fileMap = entry.value;
+      final String? hash = fileMap['deletion_hash'] as String?;
+      if (hash == null || hash.isEmpty) {
+        legacyFileNames.add(fileMap['name'] ?? entry.key);
+      }
+    }
+
+    if (legacyFileNames.isNotEmpty && mounted) {
+      final String nameList = legacyFileNames.join(', ');
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+          "⚠️ LEGACY FILES DETECTED: [$nameList] predate the Zero-Knowledge protocol "
+          "and have no deletion_hash. These files cannot be purged via this route. "
+          "Contact your vault administrator to manually retire them.",
+        ),
+        backgroundColor: Colors.deepOrangeAccent,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 6),
+      ));
+      // Do NOT clear selection — let the user deselect legacy files manually.
+      return;
+    }
+
+    // ─── TELEMETRY HEADER ─────────────────────────────────────────────────────
+    debugPrint("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    debugPrint("🔐 [BANISHMENT] Zero-Knowledge Purge — Path B");
+    debugPrint("📦 Target count: ${_selectedDocs.length} document(s)");
+    debugPrint("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+    // ─── BUILD THE BANISHMENT BATCH ───────────────────────────────────────────
+    final int count = _selectedDocs.length;
+    final batch = FirebaseFirestore.instance.batch();
+
+    for (final entry in _selectedDocs.entries) {
+      final String docId    = entry.key;
+      final Map<String, dynamic> fileMap = entry.value;
+
+      // Retrieve the deletion_hash that was sealed into Firestore at upload time.
+      // The legacy guard above already rejected null/empty hashes, so this is safe.
+      final String deletionHash = (fileMap['deletion_hash'] as String?) ?? '';
+
+      // ── DEBUG TELEMETRY: log every payload before it hits the server ────────
+      debugPrint("  ┌─ Document  : $docId");
+      debugPrint("  │  File name : ${fileMap['name'] ?? 'UNNAMED'}");
+      debugPrint("  │  Hash sent : $deletionHash");
+      debugPrint("  └─ Payload   : { status: 'PURGED', provided_hash: '$deletionHash' }");
+      // ────────────────────────────────────────────────────────────────────────
+
+      // This update must satisfy BOTH conditions of the Firestore rule simultaneously:
+      //   1. request.resource.data.status == "PURGED"
+      //   2. request.resource.data.provided_hash == resource.data.deletion_hash
+      batch.update(
+        FirebaseFirestore.instance.collection('vault_files').doc(docId),
+        {
+          'status'        : 'PURGED',
+          'provided_hash' : deletionHash,
+        },
+      );
+    }
+    
+    debugPrint("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    debugPrint("🚀 [BANISHMENT] Committing batch to Firestore...");
+
+>>>>>>> Stashed changes
     try {
       await batch.commit();
+      debugPrint("✅ [BANISHMENT] Batch committed. $count record(s) PURGED.");
+      debugPrint("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
       if (mounted) {
         setState(() => _selectedDocs.clear()); 
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("PURGE COMPLETE: $count records destroyed."), backgroundColor: Colors.redAccent, behavior: SnackBarBehavior.floating));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("BANISHMENT COMPLETE: $count record(s) marked as PURGED."),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ));
       }
+    } on FirebaseException catch (e) {
+      // The server rejected the handshake — most likely a hash mismatch or a
+      // permissions gap. Log the Firebase-specific error code for fast diagnosis.
+      debugPrint("🚨 [BANISHMENT] FirebaseException — Code: ${e.code} | ${e.message}");
+      debugPrint("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+      if (mounted) {
+        setState(() => _selectedDocs.clear());
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            "🚨 FIRESTORE HANDSHAKE FAILED [${e.code}]: "
+            "The server rejected the purge. Verify deletion_hash integrity or "
+            "check Firestore Security Rules. Details: ${e.message}",
+          ),
+          backgroundColor: Colors.deepOrangeAccent,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 6),
+        ));
+      }
+<<<<<<< Updated upstream
     } catch (e) { debugPrint("Error: $e"); }
+=======
+    } catch (e) { 
+      // Catch-all for non-Firebase errors (network timeouts, etc.)
+      debugPrint("🚨 [BANISHMENT] Unexpected error: $e");
+      debugPrint("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+      if (mounted) {
+        setState(() => _selectedDocs.clear());
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("🚨 DATABASE FIREWALL: Server blocked unauthorized purge attempt."), 
+            backgroundColor: Colors.deepOrangeAccent, 
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+>>>>>>> Stashed changes
   }
 
   Future<void> _makeSelectedSecret() async {
@@ -186,8 +355,25 @@ class _CategoryScreenState extends State<CategoryScreen> {
     } catch (e) { debugPrint("Error: $e"); }
   }
 
+<<<<<<< Updated upstream
   void _toggleSelection(String docId) {
     setState(() { _selectedDocs.contains(docId) ? _selectedDocs.remove(docId) : _selectedDocs.add(docId); });
+=======
+  // 🔥 FIX 5: UPDATED TOGGLE LOGIC — stores the complete file map.
+  // This is what gives _deleteSelectedFiles its deletion_hash without
+  // any extra Firestore reads at purge time.
+  void _toggleSelection(Map<String, dynamic> file) {
+    final docId = file['docId'] as String?;
+    if (docId == null) return;
+    setState(() { 
+      if (_selectedDocs.containsKey(docId)) {
+        _selectedDocs.remove(docId);
+      } else {
+        // Store the entire file map — ownerId, deletion_hash, name, all of it.
+        _selectedDocs[docId] = Map<String, dynamic>.from(file);
+      }
+    });
+>>>>>>> Stashed changes
   }
 
   List<IconData> _getCategoryDoodles() {

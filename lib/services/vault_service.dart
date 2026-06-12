@@ -1,8 +1,10 @@
 // Location: lib/services/vault_service.dart
 
+import 'dart:convert'; // For utf8 encoding before hashing
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:crypto/crypto.dart'; // 🔐 SHA-256 for deletion_hash generation
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:device_info_plus/device_info_plus.dart'; // 🔥 Hardware Fingerprinting
 import 'cloud_dispatcher.dart'; 
@@ -42,6 +44,18 @@ class VaultService {
     final String fileId = DateTime.now().millisecondsSinceEpoch.toString();
     String cleanType = _normalizeCategory(extension);
 
+    // 🔐 GENERATE THE DELETION HASH (Zero-Knowledge Banishment Key)
+    // The hash is a SHA-256 digest of fileId + ownerId.
+    // This is the secret that must be presented at purge time to satisfy
+    // the Firestore rule: provided_hash == resource.data.deletion_hash
+    // It is generated HERE, at upload time, and sealed into the document.
+    // It is never shown to the user and never leaves Firestore except
+    // when the banishment protocol reads it back from the stored file map.
+    final String deletionHashInput = '$fileId:${user.uid}';
+    final String deletionHash = sha256
+        .convert(utf8.encode(deletionHashInput))
+        .toString();
+
     // 2. DISPATCH TO DECENTRALIZED NODES
     final Map<String, String> nodeLinks = await _cloud.disperseToNodes(
       fileId: fileId,
@@ -62,7 +76,8 @@ class VaultService {
       'isSecret': isSecret, 
       'folderId': folderId,
       'dateAdded': FieldValue.serverTimestamp(),
-      'status': 'Shattered', 
+      'status': 'Shattered',
+      'deletion_hash': deletionHash, // 🔐 THE BANISHMENT KEY — sealed at birth
     });
   }
 
@@ -74,6 +89,7 @@ class VaultService {
         .collection('vault_files')
         .where('ownerId', isEqualTo: currentUserId) // 🔥 THE LOCK: Isolates your files from Tista's
         .where('isSecret', isEqualTo: false)
+        .where('status', isNotEqualTo: 'PURGED')  // ← add this
         .orderBy('dateAdded', descending: true)
         .snapshots()
         .map((snapshot) {
