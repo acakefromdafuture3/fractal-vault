@@ -7,7 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:open_filex/open_filex.dart'; 
 import 'package:shared_preferences/shared_preferences.dart'; 
 import 'package:path_provider/path_provider.dart'; // 🔥 Needed for temporary decryption
-
+import 'package:firebase_auth/firebase_auth.dart';
 import '../services/vault_service.dart'; 
 import '../services/security_service.dart'; 
 import '../services/encryption_service.dart'; // 🔥 The Math Engine
@@ -118,7 +118,8 @@ class _CategoryScreenState extends State<CategoryScreen> {
       await tempFile.writeAsBytes(plainBytes);
 
       await _securityMonitor.logAuthorizedAccess(
-        target: fileName, ipAddress: "192.168.Secure", location: "Encrypted Tunnel", deviceType: "Trusted Mobile Client", accessedBy: "Verified Recipient",
+        target: fileName,
+        accessedBy: FirebaseAuth.instance.currentUser?.email ?? "Unknown",
       );
 
       await OpenFilex.open(tempFile.path);

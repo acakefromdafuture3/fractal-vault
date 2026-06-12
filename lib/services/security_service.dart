@@ -1,18 +1,15 @@
 // Location: lib/services/security_service.dart
 //
 // 🔒 SECURITY SERVICE — Fractal Vault threat logging backbone
-// All breach and authorized-access events are written to Firestore
-// under the authenticated user's ownerId, so each tenant only ever
-// sees their own logs (tenant isolation).
 //
-// logBreachAttempt() now calls TelemetryService to resolve the real
-// IP, geolocation, ISP, and hardware fingerprint before writing the
-// Firestore document. logAuthorizedAccess() keeps explicit parameters
-// so the call-site can supply context the telemetry API cannot know
-// (e.g., the Sentinel agent that triggered the access).
+// Changes in this revision:
+//   • logAuthorizedAccess() now auto-fetches telemetry (no more hardcoded params)
+//   • verifyHardwareOwnership() — single source of truth for the hardware lock,
+//     used by SecurityLogsScreen and OperatorProfileScreen
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'telemetry_service.dart';
 
@@ -24,24 +21,47 @@ class SecurityService {
   String get _currentUid => FirebaseAuth.instance.currentUser?.uid ?? 'UNKNOWN_USER';
 
   // ─────────────────────────────────────────────────────────────────
+  // 0. HARDWARE OWNERSHIP VERIFICATION — single source of truth
+  // ─────────────────────────────────────────────────────────────────
+
+  /// Returns true if the currently signed-in user is the original
+  /// hardware owner of this physical device.
+  ///
+  /// On first call for a brand-new install, it registers the current
+  /// user as the owner and returns true. Every subsequent call simply
+  /// compares the stored UID against the authenticated UID.
+  ///
+  /// Used by SecurityLogsScreen and OperatorProfileScreen so the lock
+  /// logic lives in exactly one place.
+  Future<bool> verifyHardwareOwnership() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return false;
+
+    final prefs = await SharedPreferences.getInstance();
+    String? savedOwner = prefs.getString('hardware_owner_uid');
+
+    if (savedOwner == null) {
+      // First legitimate login — register this device to this user.
+      await prefs.setString('hardware_owner_uid', uid);
+      return true;
+    }
+
+    return uid == savedOwner;
+  }
+
+  // ─────────────────────────────────────────────────────────────────
   // 1. BREACH LOGGING — real telemetry auto-fetched
   // ─────────────────────────────────────────────────────────────────
 
-  /// Logs a blocked breach attempt.
+  /// Logs a blocked breach attempt with real IP, geolocation, ISP,
+  /// and hardware fingerprint resolved by [TelemetryService].
   ///
   /// [target] describes what the intruder tried to access, e.g.
-  /// "VAULT FILE — fractal_7a3b" or "SYSTEM LOGS PURGE".
-  ///
-  /// All network/IP/geo/device data is resolved automatically via
-  /// [TelemetryService]. The call is fully async and never throws —
-  /// any lookup failure falls back to "Unknown / Masked".
+  /// "VAULT FILE — fractal_7a3b" or "LOG PURGE BYPASS".
   Future<void> logBreachAttempt({required String target}) async {
     if (_currentUid == 'UNKNOWN_USER') return;
 
     try {
-      // 🛰️ Capture real telemetry before writing to Firestore.
-      // captureSnapshot() runs the IP lookup and device fingerprint
-      // concurrently, with a 6-second timeout on each network call.
       final ThreatSnapshot snap = await _telemetry.captureSnapshot();
 
       await _db.collection('security_logs').add({
@@ -49,8 +69,8 @@ class SecurityService {
         'target': target,
         'ipAddress': snap.ipAddress,
         'isp': snap.isp,
-        'location': snap.location,        // "Kolkata, India" or "Origin Masked / Unknown"
-        'deviceType': snap.deviceLabel,   // "Pixel 7 Pro · Android 14 (SDK 34) · fp: …"
+        'location': snap.location,
+        'deviceType': snap.deviceLabel,
         'timestamp': FieldValue.serverTimestamp(),
         'status': 'BLOCKED',
         'isThreat': true,
@@ -63,53 +83,52 @@ class SecurityService {
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // 2. AUTHORIZED ACCESS LOGGING — caller supplies context
+  // 2. AUTHORIZED ACCESS LOGGING — real telemetry auto-fetched
   // ─────────────────────────────────────────────────────────────────
 
   /// Logs a successful, authorized access event.
   ///
-  /// The caller explicitly supplies [ipAddress], [location], and
-  /// [deviceType] because authorized access is typically initiated
-  /// by the vault owner's known device — no extra lookup needed.
-  /// [accessedBy] identifies the actor (user email or agent name).
+  /// [target] describes the accessed resource.
+  /// [accessedBy] identifies the actor (user email or agent name, e.g. "Sentinel").
+  ///
+  /// IP, geolocation, ISP, and device info are now resolved automatically
+  /// via [TelemetryService] — no more hardcoded placeholder strings.
   Future<void> logAuthorizedAccess({
     required String target,
-    required String ipAddress,
-    required String location,
-    required String deviceType,
     required String accessedBy,
   }) async {
     if (_currentUid == 'UNKNOWN_USER') return;
 
     try {
+      final ThreatSnapshot snap = await _telemetry.captureSnapshot();
+
       await _db.collection('security_logs').add({
         'ownerId': _currentUid,
         'target': target,
-        'ipAddress': ipAddress,
-        'location': location,
-        'deviceType': deviceType,
+        'ipAddress': snap.ipAddress,
+        'isp': snap.isp,
+        'location': snap.location,
+        'deviceType': snap.deviceLabel,
         'accessedBy': accessedBy,
         'timestamp': FieldValue.serverTimestamp(),
         'status': 'GRANTED',
         'isThreat': false,
       });
+
+      print('System: Authorized access logged for $_currentUid | ${snap.ipAddress}');
     } catch (e) {
       print('Backend Error — Failed to log authorized access: $e');
     }
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // 3. FETCH SECURITY LOGS — tenant-isolated stream
+  // 3. FETCH SECURITY LOGS — tenant-isolated real-time stream
   // ─────────────────────────────────────────────────────────────────
 
   /// Returns a real-time stream of this user's security logs, newest first.
   ///
-  /// The [where('ownerId')] clause ensures tenant isolation: each user
-  /// only receives their own documents even though all logs share the
-  /// same top-level 'security_logs' collection.
-  ///
-  /// Sorting is done in Dart to avoid requiring a composite Firestore
-  /// index (ownerId + timestamp).
+  /// Sorted in Dart to avoid requiring a composite Firestore index
+  /// (ownerId + timestamp).
   Stream<List<Map<String, dynamic>>> getSecurityLogs() {
     return _db
         .collection('security_logs')
@@ -126,7 +145,7 @@ class SecurityService {
         final timeA = a['timestamp'] as Timestamp?;
         final timeB = b['timestamp'] as Timestamp?;
         if (timeA == null || timeB == null) return 0;
-        return timeB.compareTo(timeA); // newest first
+        return timeB.compareTo(timeA);
       });
 
       return logs;
@@ -139,8 +158,8 @@ class SecurityService {
 
   /// Permanently deletes a security log by its Firestore document ID.
   ///
-  /// The UI layer is responsible for enforcing the hardware-lock guard
-  /// before calling this method.
+  /// The UI layer must call [verifyHardwareOwnership] before invoking
+  /// this method — the service does not re-check ownership here.
   Future<void> deleteSecurityLog(String logId) async {
     try {
       await _db.collection('security_logs').doc(logId).delete();
