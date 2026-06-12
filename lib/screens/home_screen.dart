@@ -7,7 +7,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
-
+import '../services/security_service.dart';
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -61,24 +61,17 @@ class _HomeScreenState extends State<HomeScreen>
         // LAYER 3: UI Content wrapped in LIVE FIREBASE STREAMS
         SafeArea(
           child: StreamBuilder<QuerySnapshot>(
-            // 📡 STREAM 1: Live vault files — already tenant-isolated
+            // 📡 STREAM 1: Live vault files
             stream: FirebaseFirestore.instance
                 .collection('vault_files')
                 .where('ownerId', isEqualTo: userId)
                 .snapshots(),
             builder: (context, fileSnapshot) {
-              return StreamBuilder<QuerySnapshot>(
-                // 📡 STREAM 2: Live security logs
-                // ✅ FIX: Added ownerId filter so this works correctly
-                // with the updated Firestore security rules. Previously
-                // this fetched the entire collection and filtered in Dart,
-                // which now silently returns 0 results because other users'
-                // documents are blocked server-side.
-                stream: FirebaseFirestore.instance
-                    .collection('security_logs')
-                    .where('ownerId', isEqualTo: userId)
-                    .where('isThreat', isEqualTo: true)
-                    .snapshots(),
+              
+              return StreamBuilder<List<Map<String, dynamic>>>(
+                // 📡 STREAM 2: Use SecurityService directly! 
+                // This fetches all logs securely without needing a composite index.
+                stream: SecurityService().getSecurityLogs(),
                 builder: (context, logSnapshot) {
                   if (fileSnapshot.connectionState == ConnectionState.waiting) {
                     return const Center(
@@ -86,20 +79,26 @@ class _HomeScreenState extends State<HomeScreen>
                     );
                   }
 
-                  // 🧮 LIVE METRICS
-                  final int totalFiles = fileSnapshot.data?.docs.length ?? 0;
+                  // 🧮 LIVE METRICS FOR FILES
+                  // Filter out mathematically purged files in Dart memory
+                  final activeFiles = fileSnapshot.data?.docs.where((doc) {
+                    final data = doc.data() as Map<String, dynamic>;
+                    return data['status'] != 'PURGED';
+                  }).toList() ?? [];
+
+                  final int totalFiles = activeFiles.length;
                   final int activeShards = totalFiles * 5;
 
-                  // ✅ FIX: Stream is already filtered to isThreat == true
-                  // and ownerId == userId, so the count is just the doc count.
-                  final int threatsBlocked = logSnapshot.data?.docs.length ?? 0;
+                  // 🧮 LIVE METRICS FOR THREATS
+                  // 🔥 THE FIX: Look for 'BREACH_ATTEMPT' instead of 'isThreat'
+                  final logs = logSnapshot.data ?? [];
+                  final int threatsBlocked = logs.where((log) => log['type'] == 'BREACH_ATTEMPT').length;
 
                   // 🧮 DYNAMIC SECURITY SCORE — drops 2% per threat, floor 0
                   int score = 100 - (threatsBlocked * 2);
                   if (score < 0) score = 0;
 
-                  // ✅ FIX: "BREACH DETECTED" now appears as soon as any
-                  // threat exists, before the score degrades to WARNING.
+                  // Status strictly updates if any threat is logged
                   String status = 'SECURE';
                   if (threatsBlocked > 0) status = 'BREACH DETECTED';
                   if (score < 90) status = 'WARNING';
