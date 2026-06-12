@@ -2,22 +2,23 @@
 
 import 'dart:io';
 import 'dart:typed_data';
-import 'dart:math' as math; 
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:file_picker/file_picker.dart'; 
-import 'package:path_provider/path_provider.dart'; 
-import 'package:open_filex/open_filex.dart';       
+import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_filex/open_filex.dart';
 
 import 'home_screen.dart';
-import 'category_screen.dart'; 
-import 'security_logs_screen.dart'; 
-import 'system_protocols_screen.dart'; 
+import 'category_screen.dart';
+import 'security_logs_screen.dart';
+import 'system_protocols_screen.dart';
 import '../widgets/doodle_background.dart';
 
 import '../services/vault_service.dart';
 import '../services/encryption_service.dart';
-import '../services/cloud_dispatcher.dart'; 
+import '../services/cloud_dispatcher.dart';
+import '../services/security_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -27,13 +28,46 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  int _currentNavIndex = 0; 
-  bool _isProcessing = false; 
+  int _currentNavIndex = 0;
+  bool _isProcessing = false;
 
-  // 🔥 UPGRADED: The Decentralized Scavenger Hunt 
+  // ✅ BUG 2 FIX: Real-time threat count driven by a Firestore stream.
+  // The SecurityService stream is the single source of truth — no more
+  // hardcoded values or polling timers.
+  final SecurityService _securityService = SecurityService();
+  int _threatCount = 0;
+  int _totalLogCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _listenToSecurityLogs();
+  }
+
+  void _listenToSecurityLogs() {
+    // getSecurityLogs() is already tenant-isolated and sorted; we just
+    // need the counts here, so we consume it at the dashboard level and
+    // pass the derived metrics down into the HomeScreen widget tree via
+    // the DashboardMetrics inherited widget below.
+    _securityService.getSecurityLogs().listen((logs) {
+      if (!mounted) return;
+      setState(() {
+        _totalLogCount = logs.length;
+        _threatCount = logs.where((l) => l['isThreat'] == true).length;
+      });
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // FILE OPERATIONS (unchanged)
+  // ─────────────────────────────────────────────────────────────────
+
   Future<void> _viewSecureFile(Map<String, dynamic> fileData) async {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Scavenging shards and decrypting..."), duration: Duration(seconds: 2))
+      const SnackBar(
+        content: Text('Scavenging shards and decrypting...'),
+        duration: Duration(seconds: 2),
+      ),
     );
 
     try {
@@ -42,46 +76,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final String extension = fileData['extension'];
 
       final cloud = CloudDispatcher();
-      
-      // 1. Download the Heavy File (The Burger)
-      Uint8List? encryptedBytes = await cloud.downloadEncryptedFile(fileId);
-      if (encryptedBytes == null) throw Exception("Node 1 unreachable.");
 
-     // 2. THE SCAVENGER HUNT (Now checking 4 places!)
+      final encryptedBytes = await cloud.downloadEncryptedFile(fileId);
+      if (encryptedBytes == null) throw Exception('Node 1 unreachable.');
+
       final results = await Future.wait([
         cloud.downloadShardFromSupabase(fileId),
         cloud.downloadShardFromAppwrite(fileId),
         cloud.downloadShardFromCloudinary(fileId),
-        cloud.downloadShardFromLocal(fileId), // 🔥 ADD THIS LINE!
+        cloud.downloadShardFromLocal(fileId),
       ]);
 
-      // Filter out any failed network requests
       final List<String> gatheredShards = results.whereType<String>().toList();
-
-      // Print this so we can see exactly how many we found
-      print("DEBUG: Scavenger hunt found ${gatheredShards.length} shards!"); 
+      print('DEBUG: Scavenger hunt found ${gatheredShards.length} shards!');
 
       if (gatheredShards.length < 3) {
-        throw Exception("Quorum Failed: Need 3 shards, found ${gatheredShards.length}.");
+        throw Exception('Quorum Failed: Need 3 shards, found ${gatheredShards.length}.');
       }
 
-      // 3. Rebuild Key & Decrypt
       final crypto = EncryptionService();
-      String recoveredKey = crypto.rebuildAesKey(gatheredShards);
-      Uint8List plainBytes = crypto.decryptHeavyFile(encryptedBytes, recoveredKey, ivBase64);
+      final recoveredKey = crypto.rebuildAesKey(gatheredShards);
+      final plainBytes = crypto.decryptHeavyFile(encryptedBytes, recoveredKey, ivBase64);
 
-      // 4. Save and Open
       final tempDir = await getTemporaryDirectory();
       final tempFile = File('${tempDir.path}/view_$fileId.$extension');
       await tempFile.writeAsBytes(plainBytes);
 
       await OpenFilex.open(tempFile.path);
-
     } catch (e) {
-      debugPrint("View Error: $e");
+      debugPrint('View Error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("Error: $e"),
+          content: Text('Error: $e'),
           backgroundColor: Colors.redAccent,
         ));
       }
@@ -92,32 +118,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF0D2137),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 10),
-            Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10))),
+            Container(
+                width: 40,
+                height: 5,
+                decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(10))),
             const SizedBox(height: 20),
-            
             ListTile(
-              leading: const Icon(Icons.upload_file, color: Colors.greenAccent, size: 28), 
-              title: const Text("Secure Single File", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-              subtitle: const Text("Encrypt & shatter across 5 nodes", style: TextStyle(color: Colors.white54, fontSize: 12)),
-              onTap: () {
-                Navigator.pop(context); 
-                _pickAndSecureFiles(colors, isMultiple: false); 
-              },
-            ),
-
-            ListTile(
-              leading: const Icon(Icons.library_add, color: Color(0xFF90CAFF), size: 28),
-              title: const Text("Multiple Files (Bulk)", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-              subtitle: const Text("Select multiple items at once", style: TextStyle(color: Colors.white54, fontSize: 12)),
+              leading: const Icon(Icons.upload_file, color: Colors.greenAccent, size: 28),
+              title: const Text('Secure Single File',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+              subtitle: const Text('Encrypt & shatter across 5 nodes',
+                  style: TextStyle(color: Colors.white54, fontSize: 12)),
               onTap: () {
                 Navigator.pop(context);
-                _pickAndSecureFiles(colors, isMultiple: true); 
+                _pickAndSecureFiles(colors, isMultiple: false);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.library_add, color: Color(0xFF90CAFF), size: 28),
+              title: const Text('Multiple Files (Bulk)',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+              subtitle: const Text('Select multiple items at once',
+                  style: TextStyle(color: Colors.white54, fontSize: 12)),
+              onTap: () {
+                Navigator.pop(context);
+                _pickAndSecureFiles(colors, isMultiple: true);
               },
             ),
             const SizedBox(height: 20),
@@ -129,34 +163,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _pickAndSecureFiles(ColorScheme colors, {required bool isMultiple}) async {
     try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
+      final FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: [
-          'pdf', 'txt', 'jpg', 'png', 'doc', 'docx', 
-          'mp4', 'mov', 'mkv', 'avi',                
-          'mp3', 'wav', 'm4a', 'aac'                 
+          'pdf', 'txt', 'jpg', 'png', 'doc', 'docx',
+          'mp4', 'mov', 'mkv', 'avi',
+          'mp3', 'wav', 'm4a', 'aac',
         ],
         allowMultiple: isMultiple,
       );
 
-      if (result == null || result.files.isEmpty) return; 
+      if (result == null || result.files.isEmpty) return;
 
       setState(() => _isProcessing = true);
 
       showDialog(
         context: context,
-        barrierDismissible: false, 
+        barrierDismissible: false,
         builder: (context) => const ShardingAnimationDialog(),
       );
 
       await Future.delayed(const Duration(milliseconds: 600));
 
       for (var file in result.files) {
-        if (file.path == null) continue; 
-        
-        String filePath = file.path!; 
-        String fileName = file.name;
-        String extension = file.extension ?? fileName.split('.').last.toLowerCase();
+        if (file.path == null) continue;
+
+        final String filePath = file.path!;
+        final String fileName = file.name;
+        final String extension =
+            file.extension ?? fileName.split('.').last.toLowerCase();
 
         final fileBytes = await File(filePath).readAsBytes();
 
@@ -165,30 +200,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final encryptedData = engine.encryptHeavyFile(fileBytes, aesKey);
         final keyShards = engine.shredAesKey(aesKey);
 
-        // 🔥 THE COMBO MEAL: Dispatching the Heavy File and the 5 Shards
         await VaultService().uploadEncryptedFile(
           name: fileName,
           extension: extension,
           encryptedBytes: encryptedData['encryptedBytes'],
           iv: encryptedData['iv'],
-          shards: keyShards, 
+          shards: keyShards,
         );
       }
 
       if (mounted) {
-        Navigator.pop(context); 
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("${result.files.length} File(s) Secured & Shattered!"), 
-          backgroundColor: Colors.green
+          content: Text('${result.files.length} File(s) Secured & Shattered!'),
+          backgroundColor: Colors.green,
         ));
       }
     } catch (e) {
-      if (mounted) Navigator.pop(context); 
-      debugPrint("Error: $e");
+      if (mounted) Navigator.pop(context);
+      debugPrint('Error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("Encryption Error: $e"), 
-          backgroundColor: Colors.redAccent
+          content: Text('Encryption Error: $e'),
+          backgroundColor: Colors.redAccent,
         ));
       }
     } finally {
@@ -196,47 +230,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────
+  // BUILD
+  // ─────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    
+
+    // ✅ BUG 2 FIX: Wrap pages in DashboardMetrics so HomeScreen can
+    // read live threat data without its own separate Firestore query.
     final List<Widget> pages = [
-      const HomeScreen(),
+      DashboardMetrics(
+        threatCount: _threatCount,
+        totalLogCount: _totalLogCount,
+        child: const HomeScreen(),
+      ),
       const CategoryScreen(),
-      const SecurityLogsScreen(), 
-      const SystemProtocolsScreen(), 
+      const SecurityLogsScreen(),
+      const SystemProtocolsScreen(),
     ];
 
     return Scaffold(
-      extendBody: true, 
-      backgroundColor: Colors.transparent, 
+      extendBody: true,
+      backgroundColor: Colors.transparent,
       body: pages[_currentNavIndex],
-      
       floatingActionButton: FloatingActionButton(
         onPressed: _isProcessing ? null : () => _showUploadOptions(colors),
-        shape: const CircleBorder(), 
+        shape: const CircleBorder(),
         elevation: 2,
-        backgroundColor: _isProcessing ? Colors.grey : const Color(0xFF90CAFF), 
-        child: const Icon(Icons.add, size: 32, color: Color(0xFF0D2137)), 
+        backgroundColor: _isProcessing ? Colors.grey : const Color(0xFF90CAFF),
+        child: const Icon(Icons.add, size: 32, color: Color(0xFF0D2137)),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      
       bottomNavigationBar: BottomAppBar(
-        color: const Color(0xFF0D2137), 
-        surfaceTintColor: Colors.transparent, 
-        clipBehavior: Clip.antiAlias,        
-        shape: const CircularNotchedRectangle(), 
+        color: const Color(0xFF0D2137),
+        surfaceTintColor: Colors.transparent,
+        clipBehavior: Clip.antiAlias,
+        shape: const CircularNotchedRectangle(),
         notchMargin: 8,
         child: SizedBox(
-          height: 70, 
+          height: 70,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildNavIcon(0, Icons.grid_view_rounded, "CORE"),
-              _buildNavIcon(1, Icons.folder_special, "VAULT"),
-              const SizedBox(width: 40), 
-              _buildNavIcon(2, Icons.shield_outlined, "RADAR"),
-              _buildNavIcon(3, Icons.settings_outlined, "SYSTEM"),
+              _buildNavIcon(0, Icons.grid_view_rounded, 'CORE'),
+              _buildNavIcon(1, Icons.folder_special, 'VAULT'),
+              const SizedBox(width: 40),
+              _buildNavIcon(2, Icons.shield_outlined, 'RADAR'),
+              _buildNavIcon(3, Icons.settings_outlined, 'SYSTEM'),
             ],
           ),
         ),
@@ -246,8 +288,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildNavIcon(int index, IconData icon, String label) {
     final isSelected = _currentNavIndex == index;
-    final color = isSelected ? const Color(0xFF90CAFF) : Colors.white.withOpacity(0.4);
-    
+    final color = isSelected
+        ? const Color(0xFF90CAFF)
+        : Colors.white.withOpacity(0.4);
+
     return InkWell(
       onTap: () => setState(() => _currentNavIndex = index),
       borderRadius: BorderRadius.circular(12),
@@ -260,15 +304,58 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Icon(icon, color: color, size: 26),
             const SizedBox(height: 4),
             Text(
-              label, 
-              style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.0)
+              label,
+              style: TextStyle(
+                  color: color,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.0),
             ),
           ],
         ),
       ),
     );
   }
-} 
+}
+
+// ─────────────────────────────────────────────────────────────────
+// INHERITED WIDGET — passes live metrics to HomeScreen
+// ─────────────────────────────────────────────────────────────────
+
+/// Passes live threat metrics down to [HomeScreen] without requiring
+/// HomeScreen to manage its own Firestore subscription.
+///
+/// Usage in HomeScreen:
+/// ```dart
+/// final metrics = DashboardMetrics.of(context);
+/// final threatCount = metrics.threatCount;
+/// final isBreached = metrics.threatCount > 0;
+/// ```
+class DashboardMetrics extends InheritedWidget {
+  final int threatCount;
+  final int totalLogCount;
+
+  const DashboardMetrics({
+    super.key,
+    required this.threatCount,
+    required this.totalLogCount,
+    required super.child,
+  });
+
+  static DashboardMetrics? of(BuildContext context) {
+    return context.dependOnInheritedWidgetOfExactType<DashboardMetrics>();
+  }
+
+  @override
+  bool updateShouldNotify(DashboardMetrics oldWidget) {
+    return threatCount != oldWidget.threatCount ||
+        totalLogCount != oldWidget.totalLogCount;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// SHARDING ANIMATION DIALOG (unchanged)
+// ─────────────────────────────────────────────────────────────────
 
 class ShardingAnimationDialog extends StatefulWidget {
   const ShardingAnimationDialog({super.key});
@@ -277,24 +364,27 @@ class ShardingAnimationDialog extends StatefulWidget {
   State<ShardingAnimationDialog> createState() => _ShardingAnimationDialogState();
 }
 
-class _ShardingAnimationDialogState extends State<ShardingAnimationDialog> with SingleTickerProviderStateMixin {
+class _ShardingAnimationDialogState extends State<ShardingAnimationDialog>
+    with SingleTickerProviderStateMixin {
   late AnimationController _shardController;
   late Animation<double> _explodeProgress;
-  String _statusText = "INITIALIZING SHREDDER...";
-  
+  String _statusText = 'INITIALIZING SHREDDER...';
+
   final List<String> _steps = [
-    "ANALYZING FILE...",
-    "SHATTERING INTO 5 PIECES...",
-    "ENCRYPTING PAYLOADS...",
-    "DISPATCHING SHARDS..."
+    'ANALYZING FILE...',
+    'SHATTERING INTO 5 PIECES...',
+    'ENCRYPTING PAYLOADS...',
+    'DISPATCHING SHARDS...',
   ];
 
   @override
   void initState() {
     super.initState();
-    _shardController = AnimationController(vsync: this, duration: const Duration(milliseconds: 3500))..repeat();
-    _explodeProgress = CurvedAnimation(parent: _shardController, curve: Curves.easeOutCubic);
-    
+    _shardController = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 3500))
+      ..repeat();
+    _explodeProgress =
+        CurvedAnimation(parent: _shardController, curve: Curves.easeOutCubic);
     _cycleText();
   }
 
@@ -302,7 +392,7 @@ class _ShardingAnimationDialogState extends State<ShardingAnimationDialog> with 
     int index = 0;
     while (mounted) {
       setState(() => _statusText = _steps[index]);
-      index = (index + 1) % _steps.length; 
+      index = (index + 1) % _steps.length;
       await Future.delayed(const Duration(milliseconds: 1500));
     }
   }
@@ -316,20 +406,24 @@ class _ShardingAnimationDialogState extends State<ShardingAnimationDialog> with 
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: Colors.transparent, 
+      backgroundColor: Colors.transparent,
       elevation: 0,
       child: Container(
         padding: const EdgeInsets.all(30),
         decoration: BoxDecoration(
-          color: const Color(0xFF0A1526).withOpacity(0.95), 
+          color: const Color(0xFF0A1526).withOpacity(0.95),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: const Color(0xFF90CAFF), width: 1.5),
-          boxShadow: [BoxShadow(color: const Color(0xFF90CAFF).withOpacity(0.4), blurRadius: 30, spreadRadius: 5)],
+          boxShadow: [
+            BoxShadow(
+                color: const Color(0xFF90CAFF).withOpacity(0.4),
+                blurRadius: 30,
+                spreadRadius: 5)
+          ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            
             SizedBox(
               height: 100,
               width: 100,
@@ -337,16 +431,18 @@ class _ShardingAnimationDialogState extends State<ShardingAnimationDialog> with 
                 animation: _shardController,
                 builder: (context, child) {
                   final double progress = _explodeProgress.value;
-                  
-                  final double fileOpacity = 1.0 - (progress * 3).clamp(0.0, 1.0); 
-                  final double shardOpacity = progress < 0.1 ? (progress * 10) : (1.0 - progress);
-                  final double distance = progress * 45.0; 
+                  final double fileOpacity =
+                      1.0 - (progress * 3).clamp(0.0, 1.0);
+                  final double shardOpacity =
+                      progress < 0.1 ? (progress * 10) : (1.0 - progress);
+                  final double distance = progress * 45.0;
 
                   return Stack(
                     alignment: Alignment.center,
                     children: [
                       ...List.generate(5, (index) {
-                        final double angle = (index * (360 / 5)) * (math.pi / 180);
+                        final double angle =
+                            (index * (360 / 5)) * (math.pi / 180);
                         final double dx = math.cos(angle) * distance;
                         final double dy = math.sin(angle) * distance;
 
@@ -355,32 +451,49 @@ class _ShardingAnimationDialogState extends State<ShardingAnimationDialog> with 
                           child: Opacity(
                             opacity: shardOpacity,
                             child: Transform.rotate(
-                              angle: progress * math.pi * 3, 
-                              child: const Icon(Icons.change_history, color: Color(0xFF90CAFF), size: 24), 
+                              angle: progress * math.pi * 3,
+                              child: const Icon(Icons.change_history,
+                                  color: Color(0xFF90CAFF), size: 24),
                             ),
                           ),
                         );
                       }),
-                      
                       Transform.scale(
-                        scale: 1.0 - (progress * 0.4), 
+                        scale: 1.0 - (progress * 0.4),
                         child: Opacity(
                           opacity: fileOpacity,
-                          child: const Icon(Icons.insert_drive_file, color: Colors.white, size: 50),
+                          child: const Icon(Icons.insert_drive_file,
+                              color: Colors.white, size: 50),
                         ),
                       ),
                     ],
                   );
-                }
+                },
               ),
             ),
-            
             const SizedBox(height: 15),
-            const Text("FRACTAL SHARDING", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 2.0, fontSize: 16)),
+            const Text('FRACTAL SHARDING',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 2.0,
+                    fontSize: 16)),
             const SizedBox(height: 15),
-            Text(_statusText, style: const TextStyle(color: Colors.greenAccent, fontFamily: 'Courier', fontSize: 12, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+            Text(_statusText,
+                style: const TextStyle(
+                    color: Colors.greenAccent,
+                    fontFamily: 'Courier',
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center),
             const SizedBox(height: 25),
-            ClipRRect(borderRadius: BorderRadius.circular(10), child: const LinearProgressIndicator(backgroundColor: Colors.white10, color: Color(0xFF90CAFF), minHeight: 4)),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: const LinearProgressIndicator(
+                  backgroundColor: Colors.white10,
+                  color: Color(0xFF90CAFF),
+                  minHeight: 4),
+            ),
           ],
         ),
       ),
