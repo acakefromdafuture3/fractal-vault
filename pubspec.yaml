@@ -30,6 +30,7 @@ dependencies:
   google_generative_ai: ^0.4.7
   screen_protector: ^1.5.1
   device_info_plus: ^12.4.0
+  google_mobile_ads: ^5.0.0
 
 dev_dependencies:
   flutter_test:
