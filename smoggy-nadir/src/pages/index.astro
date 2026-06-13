@@ -5,12 +5,12 @@ import Layout from '../layouts/Layout.astro';
 <Layout title="Fractal Vault | The Zero-Knowledge Standard">
 	<main class="min-h-screen overflow-hidden bg-[#0A0E14] text-white">
 		
-		<nav class="flex flex-col md:flex-row justify-between items-center px-4 md:px-8 py-4 border-b border-white/5 backdrop-blur-md sticky top-0 z-50 bg-[#0A0E14]/80 gap-4 md:gap-0">
+		<nav class="flex flex-col md:flex-row justify-between items-center px-4 md:px-8 py-4 border-b border-cyan-500/10 backdrop-blur-md sticky top-0 z-50 bg-[#0A0E14]/80 gap-4 md:gap-0">
 			<div class="flex items-center gap-3 w-full md:w-auto justify-center md:justify-start">
 				<img 
 					src="/logo.png" 
 					alt="Fractal Vault Logo" 
-					class="w-10 h-10 object-contain rounded-xl shadow-[0_0_15px_rgba(94,243,220,0.3)]"
+					class="w-10 h-10 object-contain rounded-xl shadow-[0_0_15px_rgba(94,243,220,0.3)] hover:shadow-[0_0_25px_rgba(94,243,220,0.6)] transition-shadow duration-300"
 					onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
 				/>
 				<div class="hidden w-10 h-10 bg-cyan-500 rounded-xl items-center justify-center font-bold text-black italic">FV</div>
@@ -18,12 +18,13 @@ import Layout from '../layouts/Layout.astro';
 			</div>
 			
 			<div class="flex w-full md:w-auto overflow-x-auto pb-2 md:pb-0 hide-scrollbar gap-6 md:gap-8 text-[10px] md:text-xs font-mono tracking-widest text-slate-500 items-center whitespace-nowrap">
-				<a href="#architecture" class="hover:text-cyan-400 transition-all underline-offset-4 hover:underline cursor-pointer uppercase">Architecture</a>
-				<a href="#live-demo" class="hover:text-cyan-400 transition-all underline-offset-4 hover:underline cursor-pointer uppercase">Live_Demo</a>
-				<a href="#modules" class="hover:text-cyan-400 transition-all underline-offset-4 hover:underline cursor-pointer uppercase">Modules</a>
-				<a href="#architects" class="hover:text-cyan-400 transition-all underline-offset-4 hover:underline cursor-pointer uppercase">Architects</a>
+				<a href="#architecture" class="hover:text-cyan-400 hover:text-glow-cyan transition-all underline-offset-4 hover:underline cursor-pointer uppercase">Architecture</a>
+				<a href="#live-demo" class="hover:text-cyan-400 hover:text-glow-cyan transition-all underline-offset-4 hover:underline cursor-pointer uppercase">Live_Demo</a>
+				<a href="#upgrade" class="hover:text-green-400 hover:text-glow-green transition-all underline-offset-4 hover:underline cursor-pointer uppercase">Upgrade</a>
+				<a href="#modules" class="hover:text-cyan-400 hover:text-glow-cyan transition-all underline-offset-4 hover:underline cursor-pointer uppercase">Modules</a>
+				<a href="#architects" class="hover:text-cyan-400 hover:text-glow-cyan transition-all underline-offset-4 hover:underline cursor-pointer uppercase">Architects</a>
 				
-				<button id="destruct-btn" class="hover:text-red-500 text-slate-600 transition-all underline-offset-4 hover:underline cursor-pointer uppercase md:ml-4 pr-4 md:pr-0">
+				<button id="destruct-btn" class="hover:text-red-500 hover:text-glow-red text-slate-600 transition-all underline-offset-4 hover:underline cursor-pointer uppercase md:ml-4 pr-4 md:pr-0">
 					Self_Destruct
 				</button>
 			</div>
@@ -31,17 +32,11 @@ import Layout from '../layouts/Layout.astro';
 
 		<section class="relative min-h-[85vh] flex flex-col items-center justify-center px-8">
 			<div class="absolute inset-0 opacity-[0.03] pointer-events-none" style="background-image: url('https://www.transparenttextures.com/patterns/carbon-fibre.png');"></div>
-			<div class="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[800px] bg-[radial-gradient(circle_at_center,_rgba(94,243,220,0.1)_0%,_transparent_70%)] -z-10"></div>
+			<div class="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[800px] bg-[radial-gradient(circle_at_center,_rgba(94,243,220,0.12)_0%,_transparent_70%)] -z-10"></div>
 			
 			<div class="max-w-5xl mx-auto text-center z-10 w-full">
 				
-				<div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-cyan-500/30 bg-cyan-500/5 text-[10px] tracking-widest uppercase text-cyan-400 mb-8">
-					<span class="relative flex h-2 w-2">
-						<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-						<span class="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
-					</span>
-					Protocol V1.0 Live
-				</div>
+				
 
 				<h1 class="text-6xl md:text-8xl lg:text-9xl font-black tracking-tighter leading-none mb-2 bg-clip-text text-transparent bg-gradient-to-b from-white via-white to-gray-500 drop-shadow-[0_0_30px_rgba(255,255,255,0.1)]">
 					FRACTAL VAULT
@@ -66,25 +61,25 @@ import Layout from '../layouts/Layout.astro';
 							DOWNLOAD_APK
 						</div>
 					</a>
-					<a href="#live-demo" class="text-cyan-400 font-mono text-sm tracking-widest hover:text-white transition-colors">
+					<a href="#live-demo" class="text-cyan-400 font-mono text-sm tracking-widest hover:text-white hover:text-glow-cyan transition-colors">
 						LAUNCH_VIRTUAL_PREVIEW _>
 					</a>
 				</div>
 			</div>
 		</section>
 
-		<section id="architecture" class="py-32 px-8 bg-white/[0.01] border-y border-white/5 relative">
+		<section id="architecture" class="py-32 px-8 bg-white/[0.01] border-y border-cyan-500/5 relative">
 			<div class="max-w-6xl mx-auto grid md:grid-cols-2 gap-20 items-center">
 				<div class="space-y-8">
-					<h2 class="text-sm font-mono text-cyan-400 tracking-[0.3em] uppercase font-bold">01 // Architectural_Logic</h2>
-					<h3 class="text-4xl font-bold tracking-tight">Shamir’s Secret Sharing <br/>(SSS)</h3>
+					<h2 class="text-sm font-mono text-cyan-400 tracking-[0.3em] uppercase font-bold flicker">01 // Architectural_Logic</h2>
+					<h3 class="text-4xl font-bold tracking-tight">Shamir's Secret Sharing <br/>(SSS)</h3>
 					<p class="text-slate-400 leading-relaxed italic">"Never trust a single point of failure."</p>
 					<p class="text-slate-400 leading-relaxed">
 						We implement a <span class="text-white font-semibold">k-out-of-n threshold scheme</span>. Your vault's master key is treated as a secret mathematical constant. Without the required shards, your data remains mathematically non-existent.
 					</p>
 				</div>
 
-				<div class="bg-[#05080c] p-1 rounded-2xl border border-white/10 shadow-2xl">
+				<div class="bg-[#05080c] p-1 rounded-2xl border border-cyan-500/20 shadow-[0_0_60px_rgba(94,243,220,0.08)] hover:shadow-[0_0_60px_rgba(94,243,220,0.18)] hover:border-cyan-500/40 transition-all duration-500">
 					<div class="bg-[#0D1117] rounded-xl p-8 font-mono text-sm leading-relaxed overflow-hidden">
 						<div class="flex gap-2 mb-8">
 							<div class="w-3 h-3 rounded-full bg-red-500/20 border border-red-500/50"></div>
@@ -99,19 +94,21 @@ import Layout from '../layouts/Layout.astro';
 						&nbsp;&nbsp;&nbsp;&nbsp;<span class="text-purple-400">return</span> split(secret, k, n);<br/>
 						&nbsp;&nbsp;{"}"} <br/>
 						{"}"}
+						<span class="inline-block w-2 h-4 bg-cyan-400 ml-1 animate-pulse align-middle"></span>
 					</div>
 				</div>
 			</div>
 		</section>
 
-		<section id="live-demo" class="py-32 px-4 md:px-8 bg-black relative border-y border-white/5">
-			<div class="max-w-4xl mx-auto text-center mb-16">
-				<h2 class="text-sm font-mono text-cyan-400 tracking-[0.3em] uppercase font-bold mb-4">02 // Threat_Model_Nullified</h2>
+		<section id="live-demo" class="py-32 px-4 md:px-8 bg-black relative border-y border-cyan-500/5">
+			<div class="absolute inset-0 opacity-[0.025] pointer-events-none" style="background-image: linear-gradient(rgba(94,243,220,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(94,243,220,0.5) 1px, transparent 1px); background-size: 32px 32px;"></div>
+			<div class="max-w-4xl mx-auto text-center mb-16 relative z-10">
+				<h2 class="text-sm font-mono text-cyan-400 tracking-[0.3em] uppercase font-bold mb-4 flicker">02 // Threat_Model_Nullified</h2>
 				<h3 class="text-4xl font-bold tracking-tight text-white">See the Vault in Action.</h3>
 				<p class="text-slate-500 mt-4 font-mono text-xs animate-pulse">TAP THE DEVICE TO INITIATE DECLASSIFICATION BRIEFING</p>
 			</div>
 
-			<div id="video-container" class="relative mx-auto border-gray-800 bg-gray-900 border-[14px] rounded-[3rem] h-[700px] w-[340px] shadow-[0_0_100px_rgba(94,243,220,0.15)] transition-transform hover:scale-[1.02] cursor-pointer overflow-hidden group">
+			<div id="video-container" class="relative mx-auto border-gray-800 bg-gray-900 border-[14px] rounded-[3rem] h-[700px] w-[340px] shadow-[0_0_100px_rgba(94,243,220,0.15)] hover:shadow-[0_0_120px_rgba(94,243,220,0.3)] transition-all hover:scale-[1.02] cursor-pointer overflow-hidden group z-10">
 				
 				<div class="w-[148px] h-[18px] bg-gray-800 top-0 left-1/2 -translate-x-1/2 rounded-b-2xl absolute z-30"></div>
 				<div class="h-[46px] w-[3px] bg-gray-800 absolute -left-[17px] top-[124px] rounded-l-lg"></div>
@@ -119,7 +116,7 @@ import Layout from '../layouts/Layout.astro';
 				<div class="h-[64px] w-[3px] bg-gray-800 absolute -right-[17px] top-[142px] rounded-r-lg"></div>
 				
 				<div id="play-overlay" class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-500">
-					<div class="w-20 h-20 rounded-full bg-cyan-500/20 border border-cyan-400 flex items-center justify-center shadow-[0_0_30px_rgba(94,243,220,0.5)] group-hover:scale-110 transition-transform">
+					<div class="w-20 h-20 rounded-full bg-cyan-500/20 border border-cyan-400 flex items-center justify-center shadow-[0_0_30px_rgba(94,243,220,0.5)] group-hover:scale-110 group-hover:shadow-[0_0_50px_rgba(94,243,220,0.8)] transition-all animate-pulse">
 						<svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-cyan-400 ml-1" fill="currentColor" viewBox="0 0 24 24">
 							<path d="M8 5v14l11-7z" />
 						</svg>
@@ -130,15 +127,104 @@ import Layout from '../layouts/Layout.astro';
 			</div>
 		</section>
 
-		<section id="modules" class="py-32 px-8 border-t border-white/5">
+		<!-- ===================== MONETIZATION / ADMOB UPGRADE SECTION ===================== -->
+		<section id="upgrade" class="py-32 px-4 md:px-8 bg-[#05080c] relative border-y border-green-500/10 overflow-hidden">
+			<!-- Ambient glow -->
+			<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[radial-gradient(circle_at_center,_rgba(74,222,128,0.08)_0%,_transparent_70%)] pointer-events-none"></div>
+			<div class="absolute inset-0 opacity-[0.02] pointer-events-none" style="background-image: linear-gradient(rgba(74,222,128,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(74,222,128,0.5) 1px, transparent 1px); background-size: 40px 40px;"></div>
+
+			<div class="max-w-6xl mx-auto relative z-10">
+				<div class="text-center mb-16">
+					<h2 class="text-sm font-mono text-green-400 tracking-[0.3em] uppercase font-bold mb-4 flicker">02.5 // Access_Tier_Protocol</h2>
+					<h3 class="text-4xl md:text-5xl font-bold tracking-tight">Free Vault. Optional Upgrade.</h3>
+					<p class="text-slate-500 mt-4 font-mono text-xs max-w-xl mx-auto">
+						THE CORE ENCRYPTION ENGINE IS, AND ALWAYS WILL BE, FREE. SUPPORT THE PROTOCOL TO UNLOCK EXPANDED CAPACITY.
+					</p>
+				</div>
+
+				<div class="grid md:grid-cols-2 gap-10 items-center">
+					<!-- AdMob Mockup -->
+					<div class="relative group">
+						<div class="absolute -inset-1 bg-gradient-to-r from-green-500/20 via-cyan-500/10 to-green-500/20 rounded-3xl blur-2xl opacity-60 group-hover:opacity-100 transition-opacity duration-700"></div>
+						<div class="relative bg-[#0D1117] border border-green-500/20 rounded-3xl p-4 md:p-6 shadow-[0_0_60px_rgba(74,222,128,0.08)]">
+							<div class="flex gap-2 mb-4 px-2">
+								<div class="w-3 h-3 rounded-full bg-red-500/20 border border-red-500/50"></div>
+								<div class="w-3 h-3 rounded-full bg-yellow-500/20 border border-yellow-500/50"></div>
+								<div class="w-3 h-3 rounded-full bg-green-500/20 border border-green-500/50"></div>
+								<span class="ml-auto font-mono text-[10px] text-slate-500 tracking-widest uppercase">notification_preview.png</span>
+							</div>
+							<div class="rounded-xl overflow-hidden border border-white/5 bg-black/40">
+								<img 
+									src="/admob-screenshot.png" 
+									alt="AdMob Upgrade Notification Mockup" 
+									class="w-full h-auto object-contain"
+									onerror="this.onerror=null; this.src='/admob-screenshot.jpg';"
+								/>
+							</div>
+						</div>
+					</div>
+
+					<!-- Copy / Pricing -->
+					<div class="space-y-8">
+						<div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-green-500/30 bg-green-500/5 text-[10px] tracking-widest uppercase text-green-400 shadow-[0_0_20px_rgba(74,222,128,0.15)]">
+							<span class="relative flex h-2 w-2">
+								<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+								<span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+							</span>
+							OPTIONAL // NON-INTRUSIVE
+						</div>
+
+						<h4 class="text-3xl font-bold tracking-tight text-white">
+							Unlock <span class="text-green-400 text-glow-green">Extended Storage</span> &amp; Go Ad-Free
+						</h4>
+
+						<p class="text-slate-400 leading-relaxed">
+							Fractal Vault's zero-knowledge core &mdash; encryption, sharding, and distributed shard storage &mdash; remains <span class="text-white font-semibold">100% free, forever</span>. To keep the lights on and the servers running, the free tier displays occasional AdMob notifications and applies a base upload-slot limit.
+						</p>
+
+						<p class="text-slate-400 leading-relaxed">
+							For a one-time contribution of just <span class="text-green-400 font-mono font-bold text-glow-green">₹5</span> <span class="text-white font-semibold">unlock additional upload slots</span> across your distributed vault &mdash; no subscriptions, no recurring fees.
+						</p>
+
+						<div class="bg-[#0D1117] border border-white/5 rounded-2xl p-6 space-y-4">
+							<div class="flex items-center justify-between font-mono text-xs uppercase tracking-widest">
+								<span class="text-slate-500">Tier</span>
+								<span class="text-slate-500">Price</span>
+							</div>
+							<div class="flex items-center justify-between border-t border-white/5 pt-4">
+								<div>
+									<p class="font-bold text-white">Standard Vault</p>
+									<p class="text-slate-500 text-sm">Full SSS encryption + base upload slots</p>
+								</div>
+								<span class="font-mono text-cyan-400 font-bold">FREE</span>
+							</div>
+							<div class="flex items-center justify-between border-t border-white/5 pt-4">
+								<div>
+									<p class="font-bold text-white">Xtra Unlock</p>
+									<p class="text-slate-500 text-sm">+ More slots, less ads</p>
+								</div>
+								<span class="font-mono text-green-400 font-bold text-glow-green">₹5</span>
+							</div>
+						</div>
+
+						<p class="font-mono text-[10px] text-slate-600 tracking-widest uppercase">
+							[INFO] Payment integration not yet active in this build &mdash; preview only.
+						</p>
+					</div>
+				</div>
+			</div>
+		</section>
+		<!-- =================== END MONETIZATION / ADMOB SECTION =================== -->
+
+		<section id="modules" class="py-32 px-8 border-t border-cyan-500/5">
 			<div class="max-w-6xl mx-auto">
 				<div class="mb-16 text-center">
-					<h2 class="text-sm font-mono text-cyan-400 tracking-[0.3em] uppercase font-bold mb-4">03 // System_Modules</h2>
+					<h2 class="text-sm font-mono text-cyan-400 tracking-[0.3em] uppercase font-bold mb-4 flicker">03 // System_Modules</h2>
 					<h3 class="text-4xl md:text-5xl font-bold tracking-tight">Military-Grade Arsenal.</h3>
 				</div>
 
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-					<div class="bg-[#0D1117] border border-white/5 rounded-3xl p-8 hover:border-cyan-500/30 transition-all group flex flex-col">
+					<div class="bg-[#0D1117] border border-white/5 rounded-3xl p-8 hover:border-cyan-500/40 hover:shadow-[0_0_40px_rgba(94,243,220,0.1)] transition-all duration-500 group flex flex-col">
 						<h4 class="text-xl font-bold mb-2">Core Diagnostics</h4>
 						<p class="text-slate-400 text-sm mb-8">Real-time telemetry on vault health, active shards, and intercepted threats.</p>
 						<div class="mt-auto h-80 py-4 rounded-xl overflow-hidden border border-white/5 bg-black/40 relative">
@@ -146,7 +232,7 @@ import Layout from '../layouts/Layout.astro';
 						</div>
 					</div>
 
-					<div class="bg-[#0D1117] border border-white/5 rounded-3xl p-8 hover:border-cyan-500/30 transition-all group flex flex-col">
+					<div class="bg-[#0D1117] border border-white/5 rounded-3xl p-8 hover:border-cyan-500/40 hover:shadow-[0_0_40px_rgba(94,243,220,0.1)] transition-all duration-500 group flex flex-col">
 						<h4 class="text-xl font-bold mb-2">The Encrypted Vault</h4>
 						<p class="text-slate-400 text-sm mb-8">Manage shattered files, trace recent activity, and safely search encrypted records.</p>
 						<div class="mt-auto h-80 py-4 rounded-xl overflow-hidden border border-white/5 bg-black/40 relative">
@@ -154,7 +240,7 @@ import Layout from '../layouts/Layout.astro';
 						</div>
 					</div>
 
-					<div class="bg-[#0D1117] border border-white/5 rounded-3xl p-8 hover:border-cyan-500/30 transition-all group flex flex-col">
+					<div class="bg-[#0D1117] border border-white/5 rounded-3xl p-8 hover:border-cyan-500/40 hover:shadow-[0_0_40px_rgba(94,243,220,0.1)] transition-all duration-500 group flex flex-col">
 						<h4 class="text-xl font-bold mb-2">Radar Access Audit</h4>
 						<p class="text-slate-400 text-sm mb-8">Track every authorization and threat attempt with granular IP and device logging.</p>
 						<div class="mt-auto h-80 py-4 rounded-xl overflow-hidden border border-white/5 bg-black/40 relative">
@@ -162,7 +248,7 @@ import Layout from '../layouts/Layout.astro';
 						</div>
 					</div>
 
-					<div class="bg-[#0D1117] border border-white/5 rounded-3xl p-8 hover:border-cyan-500/30 transition-all group flex flex-col">
+					<div class="bg-[#0D1117] border border-white/5 rounded-3xl p-8 hover:border-cyan-500/40 hover:shadow-[0_0_40px_rgba(94,243,220,0.1)] transition-all duration-500 group flex flex-col">
 						<h4 class="text-xl font-bold mb-2">System Protocols</h4>
 						<p class="text-slate-400 text-sm mb-8">Configure master locks, biometric overrides, and stealth mode from the command center.</p>
 						<div class="mt-auto h-80 py-4 rounded-xl overflow-hidden border border-white/5 bg-black/40 relative">
@@ -171,11 +257,11 @@ import Layout from '../layouts/Layout.astro';
 					</div>
 				</div>
 
-				<div class="relative group bg-gradient-to-br from-red-900/20 to-black border border-red-500/20 rounded-3xl p-1 overflow-hidden transition-all duration-700 w-full shadow-2xl">
+				<div class="relative group bg-gradient-to-br from-red-900/20 to-black border border-red-500/20 rounded-3xl p-1 overflow-hidden transition-all duration-700 w-full shadow-2xl hover:shadow-[0_0_60px_rgba(248,113,113,0.15)] hover:border-red-500/40">
 					<div class="bg-[#0A0E14] rounded-[22px] p-8 md:p-12 flex flex-col md:flex-row items-center gap-10">
 						<div class="flex-1">
 							<span class="text-red-500 font-mono text-xs tracking-[0.3em] uppercase font-bold animate-pulse">Level 5 Clearance</span>
-							<h3 class="text-3xl font-bold mt-2 mb-4 text-white group-hover:text-red-400 transition-colors">The Ghost Protocol</h3>
+							<h3 class="text-3xl font-bold mt-2 mb-4 text-white group-hover:text-red-400 group-hover:text-glow-red transition-colors">The Ghost Protocol</h3>
 							<p class="text-slate-400 mb-6 font-light">Advanced cloaking technology. Hover over the encrypted payload to reveal the interface.</p>
 						</div>
 						<div class="flex-1 w-full h-72 py-4 rounded-xl overflow-hidden border border-red-500/20 relative">
@@ -280,7 +366,7 @@ import Layout from '../layouts/Layout.astro';
 			</svg>
 		</button>
 
-		<footer class="py-20 border-t border-white/5 text-center">
+		<footer class="py-20 border-t border-cyan-500/5 text-center">
 			<p class="font-mono text-[10px] tracking-[0.5em] text-slate-600 uppercase">Fractal Vault &copy; 2026 // Distributed Security Protocol</p>
 		</footer>
 	</main>

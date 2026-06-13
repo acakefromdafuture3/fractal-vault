@@ -122,21 +122,33 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
   }
 
   Future<void> _removeSecret(String docId, String fileName) async {
-    try {
-      await FirebaseFirestore.instance.collection('vault_files').doc(docId).update({
-        'isSecret': false,
-        'folderId': null
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("$fileName restored to public vault."), 
-          backgroundColor: Colors.green, behavior: SnackBarBehavior.floating
-        ));
-      }
-    } catch (e) {
-      debugPrint("Error making public: $e");
+  try {
+    await FirebaseFirestore.instance
+        .collection('vault_files')
+        .doc(docId)
+        .update({
+          'isSecret': false,
+          'folderId': null,
+        });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text("$fileName restored to public vault."),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  } catch (e) {
+    debugPrint("Error restoring file: $e");
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text("Failed to restore: $e"),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ));
     }
   }
+}
 
   Future<void> _deleteFolder(String folderId, String folderName) async {
     bool? confirm = await showDialog<bool>(
@@ -185,41 +197,66 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
   }
 
   Future<void> _deleteSelectedSecretFiles() async {
-    if (_selectedSecretDocs.isEmpty) return;
+  if (_selectedSecretDocs.isEmpty) return;
 
-    bool? confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFFF5F7FA),
-        title: const Text("Permanently Delete?", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-        content: Text("Are you sure you want to permanently destroy these ${_selectedSecretDocs.length} files?", style: const TextStyle(color: Colors.black87)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("CANCEL", style: TextStyle(color: Colors.black54))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("DESTROY", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
-          ),
-        ],
-      )
-    );
+  bool? confirm = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: const Color(0xFFF5F7FA),
+      title: Text(
+        "Destroy ${_selectedSecretDocs.length} File(s)?",
+        style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
+      ),
+      content: const Text(
+        "These files will be permanently destroyed and cannot be recovered.",
+        style: TextStyle(color: Colors.black87),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text("CANCEL", style: TextStyle(color: Colors.black54)),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text("DESTROY", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        ),
+      ],
+    ),
+  );
 
-    if (confirm == true) {
-      final batch = FirebaseFirestore.instance.batch();
-      for (String docId in _selectedSecretDocs) {
-        batch.delete(FirebaseFirestore.instance.collection('vault_files').doc(docId));
-      }
-      await batch.commit();
+  if (confirm != true) return;
 
-      if (mounted) {
-        setState(() => _selectedSecretDocs.clear());
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text("Files permanently destroyed."), 
-          backgroundColor: Colors.redAccent, behavior: SnackBarBehavior.floating
-        ));
-      }
+  try {
+    // Delete one by one so each delete hits the security rule individually.
+    // batch.delete() still evaluates each doc against the rules separately,
+    // but explicit iteration makes error handling per-file easier.
+    for (final docId in _selectedSecretDocs.toList()) {
+      await FirebaseFirestore.instance
+          .collection('vault_files')
+          .doc(docId)
+          .delete();
+    }
+
+    if (mounted) {
+      setState(() => _selectedSecretDocs.clear());
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text("Files permanently destroyed."),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  } catch (e) {
+    debugPrint("Delete error: $e");
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text("Failed to destroy: $e"),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ));
     }
   }
+}
 
   Future<void> _showMoveMenu() async {
     if (_selectedSecretDocs.isEmpty) return;
