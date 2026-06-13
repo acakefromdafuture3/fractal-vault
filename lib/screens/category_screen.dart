@@ -76,7 +76,41 @@ class _CategoryScreenState extends State<CategoryScreen> {
     final String fileId = fileData['docId'];
     final String ivBase64 = fileData['iv'];
     final String extension = fileData['extension'];
-    
+
+    // ─── HARDWARE OWNERSHIP GATE ──────────────────────────────────────────────
+    // The Firestore stream is already scoped by ownerId, so a file in this list
+    // always belongs to the currently authenticated user — a UID comparison would
+    // always pass. The REAL threat is a foreign operator who has logged into this
+    // device using someone else's credentials. verifyHardwareOwnership() catches
+    // exactly that: if the authenticated UID doesn't match the UID that originally
+    // registered this physical hardware, it's an intrusion — log it and abort.
+    final bool isHardwareOwner = await _securityMonitor.verifyHardwareOwnership();
+
+    if (!isHardwareOwner) {
+      final String? intruderUid = FirebaseAuth.instance.currentUser?.uid;
+      debugPrint("🚨 [HARDWARE GATE] Foreign operator detected on this device.");
+      debugPrint("   Intruder UID : $intruderUid");
+      debugPrint("   Blocked file : $fileName");
+
+      await _securityMonitor.logBreachAttempt(
+        target: "FOREIGN OPERATOR — UNAUTHORIZED FILE ACCESS: $fileName",
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("🚨 ACCESS DENIED: Hardware lock mismatch. Breach logged."),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+      return; // Hard abort — never reach the shard download
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Row(children: [

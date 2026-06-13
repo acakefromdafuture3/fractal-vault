@@ -66,6 +66,7 @@ class SecurityService {
 
       await _db.collection('security_logs').add({
         'ownerId': _currentUid,
+        'type': 'BREACH_ATTEMPT',       // 🔥 THE FIX: home_screen filters on this field
         'target': target,
         'ipAddress': snap.ipAddress,
         'isp': snap.isp,
@@ -73,7 +74,7 @@ class SecurityService {
         'deviceType': snap.deviceLabel,
         'timestamp': FieldValue.serverTimestamp(),
         'status': 'BLOCKED',
-        'isThreat': true,
+        'isThreat': true,               // kept for dashboard_screen._listenToSecurityLogs()
       });
 
       print('System: Breach logged for $_currentUid | IP: ${snap.ipAddress} | ${snap.location}');
@@ -104,6 +105,7 @@ class SecurityService {
 
       await _db.collection('security_logs').add({
         'ownerId': _currentUid,
+        'type': 'AUTHORIZED_ACCESS',    // symmetric with BREACH_ATTEMPT for future filtering
         'target': target,
         'ipAddress': snap.ipAddress,
         'isp': snap.isp,

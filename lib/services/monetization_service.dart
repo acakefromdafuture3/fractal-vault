@@ -37,13 +37,20 @@ class MonetizationService {
     );
   }
 
-  // 🔥 3. CHECK VAULT CAPACITY
+  // 🔥 3. CHECK VAULT CAPACITY (FIXED: Excludes PURGED files)
+  // ─────────────────────────────────────────────────────────────────────
+  // This method now counts ONLY active (non-PURGED) files, matching the
+  // behavior of the UI streams (getVaultFiles, getRecentFiles).
+  // Previously, PURGED files were still counted, causing the AdMob modal
+  // to trigger even though the user saw fewer files in the vault.
+  // ─────────────────────────────────────────────────────────────────────
   Future<bool> isVaultFull() async {
     if (user == null) return false;
 
     final filesSnapshot = await _db
         .collection('vault_files')
         .where('ownerId', isEqualTo: user!.uid)
+        .where('status', isNotEqualTo: 'PURGED')  // 🔐 THE FIX: Exclude soft-deleted files
         .count()
         .get();
     
@@ -51,6 +58,11 @@ class MonetizationService {
 
     final prefs = await SharedPreferences.getInstance();
     int maxSlots = prefs.getInt('vault_max_slots') ?? 20;
+
+    debugPrint("📊 [VAULT CAPACITY CHECK]");
+    debugPrint("   Active files (excluding PURGED): $currentFiles");
+    debugPrint("   Max slots: $maxSlots");
+    debugPrint("   Vault full: ${currentFiles >= maxSlots}");
 
     return currentFiles >= maxSlots;
   }
