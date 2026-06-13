@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart'; 
 import 'package:local_auth/local_auth.dart'; 
 import 'package:open_filex/open_filex.dart'; 
 import 'dart:typed_data';
@@ -23,6 +24,7 @@ class SecretVaultScreen extends StatefulWidget {
 class _SecretVaultScreenState extends State<SecretVaultScreen> {
   final SecretVaultService _secretService = SecretVaultService();
   final LocalAuthentication _localAuth = LocalAuthentication(); 
+  final user = FirebaseAuth.instance.currentUser; 
   
   String _enteredPin = '';
   bool _isUnlocked = false;
@@ -122,34 +124,35 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
   }
 
   Future<void> _removeSecret(String docId, String fileName) async {
-  try {
-    await FirebaseFirestore.instance
-        .collection('vault_files')
-        .doc(docId)
-        .update({
-          'isSecret': false,
-          'folderId': null,
-        });
+    try {
+      await FirebaseFirestore.instance
+          .collection('vault_files')
+          .doc(docId)
+          .update({
+            'isSecret': false,
+            'folderId': null,
+          });
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text("$fileName restored to public vault."),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-      ));
-    }
-  } catch (e) {
-    debugPrint("Error restoring file: $e");
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text("Failed to restore: $e"),
-        backgroundColor: Colors.redAccent,
-        behavior: SnackBarBehavior.floating,
-      ));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("$fileName restored to public vault."),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } catch (e) {
+      debugPrint("Error restoring file: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Failed to restore: $e"),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
     }
   }
-}
 
+  // 🔥 THE FIX: We explicitly filter by `ownerId` before deleting the folder!
   Future<void> _deleteFolder(String folderId, String folderName) async {
     bool? confirm = await showDialog<bool>(
       context: context,
@@ -169,19 +172,45 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
     );
 
     if (confirm == true) {
-      final files = await FirebaseFirestore.instance.collection('vault_files').where('folderId', isEqualTo: folderId).get();
-      final batch = FirebaseFirestore.instance.batch();
-      for(var doc in files.docs) {
-        batch.delete(doc.reference);
-      }
-      batch.delete(FirebaseFirestore.instance.collection('vault_folders').doc(folderId));
-      await batch.commit();
+      try {
+        final files = await FirebaseFirestore.instance
+            .collection('vault_files')
+            .where('ownerId', isEqualTo: user?.uid) // 🔥 THIS SOLVES THE "RULES ARE NOT FILTERS" ERROR
+            .where('folderId', isEqualTo: folderId)
+            .get();
+        
+        for(var doc in files.docs) {
+          try {
+            await doc.reference.delete();
+          } catch (e) {
+            debugPrint("Skipping file deletion error: $e");
+          }
+        }
+        
+        await FirebaseFirestore.instance.collection('vault_folders').doc(folderId).delete();
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text("Folder and contents destroyed."), 
-          backgroundColor: Colors.redAccent, behavior: SnackBarBehavior.floating
-        ));
+        if (_activeFolderId == folderId) {
+          setState(() {
+            _activeFolderId = null;
+            _activeFolderName = null;
+          });
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text("Folder and contents destroyed."), 
+            backgroundColor: Colors.redAccent, behavior: SnackBarBehavior.floating
+          ));
+        }
+      } catch (e) {
+        debugPrint("Folder Deletion Server Error: $e");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text("Server Error: $e"), 
+            backgroundColor: Colors.deepOrangeAccent, behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 5),
+          ));
+        }
       }
     }
   }
@@ -197,72 +226,81 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
   }
 
   Future<void> _deleteSelectedSecretFiles() async {
-  if (_selectedSecretDocs.isEmpty) return;
+    if (_selectedSecretDocs.isEmpty) return;
 
-  bool? confirm = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      backgroundColor: const Color(0xFFF5F7FA),
-      title: Text(
-        "Destroy ${_selectedSecretDocs.length} File(s)?",
-        style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
-      ),
-      content: const Text(
-        "These files will be permanently destroyed and cannot be recovered.",
-        style: TextStyle(color: Colors.black87),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text("CANCEL", style: TextStyle(color: Colors.black54)),
+    bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFF5F7FA),
+        title: Text(
+          "Destroy ${_selectedSecretDocs.length} File(s)?",
+          style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
         ),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-          onPressed: () => Navigator.pop(context, true),
-          child: const Text("DESTROY", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: const Text(
+          "These files will be permanently destroyed and cannot be recovered.",
+          style: TextStyle(color: Colors.black87),
         ),
-      ],
-    ),
-  );
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("CANCEL", style: TextStyle(color: Colors.black54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("DESTROY", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
 
-  if (confirm != true) return;
+    if (confirm != true) return;
 
-  try {
-    // Delete one by one so each delete hits the security rule individually.
-    // batch.delete() still evaluates each doc against the rules separately,
-    // but explicit iteration makes error handling per-file easier.
-    for (final docId in _selectedSecretDocs.toList()) {
-      await FirebaseFirestore.instance
-          .collection('vault_files')
-          .doc(docId)
-          .delete();
-    }
+    try {
+      for (final docId in _selectedSecretDocs.toList()) {
+        await FirebaseFirestore.instance
+            .collection('vault_files')
+            .doc(docId)
+            .delete();
+      }
 
-    if (mounted) {
-      setState(() => _selectedSecretDocs.clear());
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text("Files permanently destroyed."),
-        backgroundColor: Colors.redAccent,
-        behavior: SnackBarBehavior.floating,
-      ));
-    }
-  } catch (e) {
-    debugPrint("Delete error: $e");
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text("Failed to destroy: $e"),
-        backgroundColor: Colors.redAccent,
-        behavior: SnackBarBehavior.floating,
-      ));
+      if (mounted) {
+        setState(() => _selectedSecretDocs.clear());
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Files permanently destroyed."),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } catch (e) {
+      debugPrint("Delete error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Failed to destroy: $e"),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
     }
   }
-}
 
   Future<void> _showMoveMenu() async {
     if (_selectedSecretDocs.isEmpty) return;
 
-    final folderSnapshot = await FirebaseFirestore.instance.collection('vault_folders').orderBy('createdAt').get();
-    final folders = folderSnapshot.docs;
+    final folderSnapshot = await FirebaseFirestore.instance
+        .collection('vault_folders')
+        .where('ownerId', isEqualTo: user?.uid) 
+        .get();
+        
+    final folders = folderSnapshot.docs.toList();
+    folders.sort((a, b) {
+      final dataA = a.data() as Map<String, dynamic>;
+      final dataB = b.data() as Map<String, dynamic>;
+      final tA = dataA['createdAt'] as Timestamp?;
+      final tB = dataB['createdAt'] as Timestamp?;
+      if (tA == null || tB == null) return 0;
+      return tA.compareTo(tB);
+    });
 
     if (!mounted) return;
 
@@ -368,10 +406,11 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
       )
     );
 
-    if (folderName != null && folderName.trim().isNotEmpty) {
+    if (folderName != null && folderName.trim().isNotEmpty && user != null) {
       await FirebaseFirestore.instance.collection('vault_folders').add({
         'name': folderName.trim(),
         'createdAt': FieldValue.serverTimestamp(),
+        'ownerId': user!.uid, 
       });
     }
   }
@@ -393,7 +432,6 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
     }
   }
 
-  // 🔥 UPGRADED: Decentralized Reconstruction Logic for the Secret Vault
   Future<void> _openSecretFile(Map<String, dynamic> fileData) async {
     setState(() => _isLoading = true);
 
@@ -404,14 +442,12 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
 
       final cloud = CloudDispatcher();
       
-      // 1. Fetch the Heavy Encrypted Bytes from Node 1 (The Burger)
       Uint8List? encryptedBytes = await cloud.downloadEncryptedFile(fileId);
 
       if (encryptedBytes == null) {
         throw Exception("Failed to retrieve encrypted data from primary node.");
       }
 
-      // 2. The Scavenger Hunt: Gather Key Fragments from other nodes (The Fries)
       final results = await Future.wait([
         cloud.downloadShardFromSupabase(fileId),
         cloud.downloadShardFromAppwrite(fileId),
@@ -419,27 +455,21 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
         cloud.downloadShardFromLocal(fileId),
       ]);
 
-      // Filter out any failed network requests
       final List<String> gatheredShards = results.whereType<String>().toList();
 
-      // Ensure we hit the mathematical threshold (k=3)
       if (gatheredShards.length < 3) {
         throw Exception("Quorum Failed: Need 3 shards, found ${gatheredShards.length}.");
       }
 
-      // 3. Re-forge the Master AES Key using the Shards
       final crypto = EncryptionService();
       String recoveredKey = crypto.rebuildAesKey(gatheredShards);
 
-      // 4. Decrypt the heavy file
       Uint8List plainBytes = crypto.decryptHeavyFile(encryptedBytes, recoveredKey, ivBase64);
 
-      // 5. Save to a temporary cache directory
       final tempDir = await getTemporaryDirectory();
       final tempFile = File('${tempDir.path}/decrypted_$fileId.$extension');
       await tempFile.writeAsBytes(plainBytes);
 
-      // 6. Open the file natively on the phone!
       await OpenFilex.open(tempFile.path);
 
     } catch (e) {
@@ -593,11 +623,23 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
 
   Widget _buildFolderList() {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('vault_folders').orderBy('createdAt').snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection('vault_folders')
+          .where('ownerId', isEqualTo: user?.uid) 
+          .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
         
-        final folders = snapshot.data?.docs ?? [];
+        final folders = snapshot.data?.docs.toList() ?? [];
+        
+        folders.sort((a, b) {
+          final dataA = a.data() as Map<String, dynamic>;
+          final dataB = b.data() as Map<String, dynamic>;
+          final tA = dataA['createdAt'] as Timestamp?;
+          final tB = dataB['createdAt'] as Timestamp?;
+          if (tA == null || tB == null) return 0;
+          return tA.compareTo(tB);
+        });
 
         return ListView.builder(
           padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 100),
@@ -654,8 +696,12 @@ class _SecretVaultScreenState extends State<SecretVaultScreen> {
         final allSecretFiles = snapshot.data ?? [];
         
         final folderFiles = allSecretFiles.where((file) {
-          if (_activeFolderId == 'unsorted') return file['folderId'] == null;
-          return file['folderId'] == _activeFolderId;
+          final fId = file['folderId'];
+          
+          if (_activeFolderId == 'unsorted') {
+            return fId == null || fId == ''; 
+          }
+          return fId == _activeFolderId;
         }).toList();
 
         if (folderFiles.isEmpty) {

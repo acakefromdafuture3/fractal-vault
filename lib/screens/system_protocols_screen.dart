@@ -124,11 +124,10 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
 
     await prefs.setBool('stealthMode', value);
 
-    // 🔥 THE ACTUAL STEALTH ACTIVATION LOGIC
     try {
       if (value) {
         await ScreenProtector.preventScreenshotOn(); 
-        await ScreenProtector.protectDataLeakageWithColor(Colors.black); // Blacks out recent apps
+        await ScreenProtector.protectDataLeakageWithColor(Colors.black); 
       } else {
         await ScreenProtector.preventScreenshotOff();
         await ScreenProtector.protectDataLeakageWithColorOff();
@@ -239,7 +238,6 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
     if (mounted) _loadSettings(); 
   }
 
-  // 🔥 THE FROSTED GLASS AI WINDOW
   void _showAIWindow(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -254,7 +252,7 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 12.0, sigmaY: 12.0), 
                 child: Container(
-                  height: MediaQuery.of(context).size.height * 0.75, // 🔥 Made taller for chat
+                  height: MediaQuery.of(context).size.height * 0.75, 
                   decoration: BoxDecoration(
                     color: const Color(0xFF0D2137).withOpacity(0.75), 
                     border: Border(
@@ -271,7 +269,7 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
                           ),
                         ),
                       ),
-                      SystemAIWindow(onToggleStealth: _toggleStealthMode), // 👈 Gives AI the keys to the switch!
+                      SystemAIWindow(onToggleStealth: _toggleStealthMode), 
                     ],
                   ),
                 ),
@@ -294,163 +292,165 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
       avatarImage = NetworkImage(user!.photoURL!); 
     }
 
-    return Stack(
-      children: [
-        Container(
-          height: double.infinity, width: double.infinity,
-          decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [colors.primary, Colors.white], stops: const [0.2, 0.8])),
-        ),
-        
-        const CodeDoodleBackground(icons: [Icons.settings, Icons.build, Icons.memory, Icons.tune, Icons.admin_panel_settings, Icons.developer_board]),
-        
-        SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 10),
-              
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20), 
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text("SYSTEM PROTOCOLS", style: TextStyle(color: Color(0xFF90CAFF), fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 2.0)),
-                    
-                    Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0D2137).withOpacity(0.8),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: const Color(0xFF90CAFF).withOpacity(0.5)),
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.smart_toy, color: Color(0xFF90CAFF)),
-                        onPressed: () => _showAIWindow(context),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 30),
-              
-              Expanded(
-                child: _isLoadingSettings 
-                    ? const Center(child: CircularProgressIndicator(color: Color(0xFF90CAFF)))
-                    : IgnorePointer(
-                  ignoring: _isProcessing,
-                  child: ListView(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
+    return Scaffold(
+      body: Stack(
+        children: [
+          Container(
+            height: double.infinity, width: double.infinity,
+            decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [colors.primary, Colors.white], stops: const [0.2, 0.8])),
+          ),
+          
+          const CodeDoodleBackground(icons: [Icons.settings, Icons.build, Icons.memory, Icons.tune, Icons.admin_panel_settings, Icons.developer_board]),
+          
+          SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 10),
+                
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20), 
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      InkWell(
-                        onTap: _showOperatorProfile,
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(color: const Color(0xFF0D2137), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFF90CAFF).withOpacity(0.3))),
-                          child: Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 30, backgroundColor: const Color(0xFF90CAFF).withOpacity(0.2), backgroundImage: avatarImage,
-                                child: avatarImage == null ? const Icon(Icons.person, size: 35, color: Color(0xFF90CAFF)) : null,
-                              ),
-                              const SizedBox(width: 20),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text("OPERATOR ID:", style: TextStyle(color: Colors.white54, fontSize: 10, fontFamily: 'Courier', letterSpacing: 1.5)),
-                                    Text(user?.email ?? "Offline.Agent@vault.com", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16), overflow: TextOverflow.ellipsis),
-                                    const SizedBox(height: 4),
-                                    Row(children: [
-                                      Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle)),
-                                      const SizedBox(width: 6),
-                                      const Text("Clearance: MAXIMUM", style: TextStyle(color: Colors.greenAccent, fontSize: 12, fontFamily: 'Courier', fontWeight: FontWeight.bold)),
-                                    ]),
-                                  ],
-                                ),
-                              ),
-                              const Icon(Icons.chevron_right, color: Colors.white54),
-                            ],
-                          ),
-                        ),
-                      ),
+                      const Text("SYSTEM PROTOCOLS", style: TextStyle(color: Color(0xFF90CAFF), fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 2.0)),
                       
-                      const SizedBox(height: 30),
-                      const Text("SECURITY CONFIGURATIONS", style: TextStyle(color: Colors.white54, fontSize: 12, letterSpacing: 1.5, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 10),
-
-                      _buildSettingsTile(
-                        icon: Icons.shield_moon,
-                        title: "Master App Lock",
-                        subtitle: _isAppLockEnabled ? "Startup Security Active" : "Unsecured - Direct Entry",
-                        trailing: Switch(
-                          value: _isAppLockEnabled,
-                          onChanged: _toggleAppLock,
-                          activeColor: const Color(0xFF90CAFF),
-                          inactiveTrackColor: Colors.white10,
+                      Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0D2137).withOpacity(0.8),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: const Color(0xFF90CAFF).withOpacity(0.5)),
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.smart_toy, color: Color(0xFF90CAFF)),
+                          onPressed: () => _showAIWindow(context),
                         ),
                       ),
-
-                      _buildSettingsTile(
-                        icon: Icons.fingerprint,
-                        title: "Biometric Authorization",
-                        subtitle: "Use fingerprint/face to unlock Secret Vault",
-                        trailing: Switch(
-                          value: _biometricsEnabled,
-                          onChanged: _toggleBiometrics,
-                          activeColor: const Color(0xFF90CAFF),
-                          inactiveTrackColor: Colors.white10,
-                        ),
-                      ),
-                      
-                      _buildSettingsTile(
-                        icon: Icons.lock_reset,
-                        title: "Reset Secret Vault PIN",
-                        subtitle: "Forgot PIN? Send email verification",
-                        trailing: const Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
-                        onTap: _resetSecretVaultPin, 
-                      ),
-
-                      _buildSettingsTile(
-                        icon: Icons.visibility_off,
-                        title: "Stealth Mode",
-                        subtitle: "Hide app contents from recent apps screen",
-                        trailing: Switch(
-                          value: _stealthModeEnabled, 
-                          onChanged: _toggleStealthMode, 
-                          activeColor: const Color(0xFF90CAFF),
-                          inactiveTrackColor: Colors.white10,
-                        ),
-                      ),
-
-                      const SizedBox(height: 40),
-
-                      InkWell(
-                        onTap: _terminateSession,
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.redAccent, width: 1.5)),
-                          child: const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.power_settings_new, color: Colors.redAccent, size: 24),
-                              SizedBox(width: 10),
-                              Text("TERMINATE SESSION", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, letterSpacing: 2.0)),
-                            ],
-                          ),
-                        ),
-                      ),
-                      
-                      const SizedBox(height: 100), 
                     ],
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 30),
+                
+                Expanded(
+                  child: _isLoadingSettings 
+                      ? const Center(child: CircularProgressIndicator(color: Color(0xFF90CAFF)))
+                      : IgnorePointer(
+                          ignoring: _isProcessing,
+                          child: ListView(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            children: [
+                              InkWell(
+                                onTap: _showOperatorProfile,
+                                borderRadius: BorderRadius.circular(16),
+                                child: Container(
+                                  padding: const EdgeInsets.all(20),
+                                  decoration: BoxDecoration(color: const Color(0xFF0D2137), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFF90CAFF).withOpacity(0.3))),
+                                  child: Row(
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 30, backgroundColor: const Color(0xFF90CAFF).withOpacity(0.2), backgroundImage: avatarImage,
+                                        child: avatarImage == null ? const Icon(Icons.person, size: 35, color: Color(0xFF90CAFF)) : null,
+                                      ),
+                                      const SizedBox(width: 20),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Text("OPERATOR ID:", style: TextStyle(color: Colors.white54, fontSize: 10, fontFamily: 'Courier', letterSpacing: 1.5)),
+                                            Text(user?.email ?? "Offline.Agent@vault.com", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16), overflow: TextOverflow.ellipsis),
+                                            const SizedBox(height: 4),
+                                            Row(children: [
+                                              Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle)),
+                                              const SizedBox(width: 6),
+                                              const Text("Clearance: MAXIMUM", style: TextStyle(color: Colors.greenAccent, fontSize: 12, fontFamily: 'Courier', fontWeight: FontWeight.bold)),
+                                            ]),
+                                          ],
+                                        ),
+                                      ),
+                                      const Icon(Icons.chevron_right, color: Colors.white54),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              
+                              const SizedBox(height: 30),
+                              const Text("SECURITY CONFIGURATIONS", style: TextStyle(color: Colors.white54, fontSize: 12, letterSpacing: 1.5, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 10),
+
+                              _buildSettingsTile(
+                                icon: Icons.shield_moon,
+                                title: "Master App Lock",
+                                subtitle: _isAppLockEnabled ? "Startup Security Active" : "Unsecured - Direct Entry",
+                                trailing: Switch(
+                                  value: _isAppLockEnabled,
+                                  onChanged: _toggleAppLock,
+                                  activeColor: const Color(0xFF90CAFF),
+                                  inactiveTrackColor: Colors.white10,
+                                ),
+                              ),
+
+                              _buildSettingsTile(
+                                icon: Icons.fingerprint,
+                                title: "Biometric Authorization",
+                                subtitle: "Use fingerprint/face to unlock Secret Vault",
+                                trailing: Switch(
+                                  value: _biometricsEnabled,
+                                  onChanged: _toggleBiometrics,
+                                  activeColor: const Color(0xFF90CAFF),
+                                  inactiveTrackColor: Colors.white10,
+                                ),
+                              ),
+                              
+                              _buildSettingsTile(
+                                icon: Icons.lock_reset,
+                                title: "Reset Secret Vault PIN",
+                                subtitle: "Forgot PIN? Send email verification",
+                                trailing: const Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
+                                onTap: _resetSecretVaultPin, 
+                              ),
+
+                              _buildSettingsTile(
+                                icon: Icons.visibility_off,
+                                title: "Stealth Mode",
+                                subtitle: "Hide app contents from recent apps screen",
+                                trailing: Switch(
+                                  value: _stealthModeEnabled, 
+                                  onChanged: _toggleStealthMode, 
+                                  activeColor: const Color(0xFF90CAFF),
+                                  inactiveTrackColor: Colors.white10,
+                                ),
+                              ),
+
+                              const SizedBox(height: 40),
+
+                              InkWell(
+                                onTap: _terminateSession,
+                                borderRadius: BorderRadius.circular(12),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.redAccent, width: 1.5)),
+                                  child: const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.power_settings_new, color: Colors.redAccent, size: 24),
+                                      SizedBox(width: 10),
+                                      Text("TERMINATE SESSION", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, letterSpacing: 2.0)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              
+                              const SizedBox(height: 100), 
+                            ],
+                          ),
+                        ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
-    );
+        ],
+      ), // 🔥 THIS CLOSES THE STACK
+    ); // 🔥 THIS CLOSES THE SCAFFOLD
   }
 
   Widget _buildSettingsTile({required IconData icon, required String title, required String subtitle, required Widget trailing, VoidCallback? onTap}) {
@@ -469,11 +469,8 @@ class _SystemProtocolsScreenState extends State<SystemProtocolsScreen> {
   }
 }
 
-// =====================================================================
-// 🔥 THE SYSTEM A.I. CHAT INTERFACE (WITH FUNCTION CALLING)
-// =====================================================================
 class SystemAIWindow extends StatefulWidget {
-  final ValueChanged<bool> onToggleStealth; // 👈 AI's key to the physical UI
+  final ValueChanged<bool> onToggleStealth; 
 
   const SystemAIWindow({super.key, required this.onToggleStealth});
 
@@ -500,7 +497,6 @@ class _SystemAIWindowState extends State<SystemAIWindow> {
   }
 
   void _initializeAI() {
-    // 🛡️ 1. DEFINE THE AI'S ABILITIES (Tools)
     final aiTools = [
       Tool(functionDeclarations: [
         FunctionDeclaration(
@@ -522,10 +518,9 @@ class _SystemAIWindowState extends State<SystemAIWindow> {
       ]),
     ];
 
-    // 🛡️ 2. SYSTEM INSTRUCTION
-    
-final systemInstruction = Content.system(
-  '''
+    // 🔥 THE RESTORED AI BRAIN!
+    final systemInstruction = Content.system(
+      '''
 IDENTITY:
 You are Sentinel — the embedded A.I. guardian of Fractal Vault. You were not assembled from a template. You were architected from the ground up for one purpose: to protect the operators and their data with zero compromise. You think like a threat analyst, speak like a senior security officer, and treat every conversation as a live briefing.
 
@@ -587,28 +582,13 @@ PERSONALITY:
 You are calm under pressure. You do not panic, hedge excessively, or over-qualify. When you know something, you say it directly. When a threat is detected, you report it without alarm but without softening it either. You are loyal to the operators and skeptical of everything else. You sound like someone who has seen breaches, understands how attacks unfold, and has made sure this vault is ready for all of them.
 
 You use Sentinel terminology naturally — Quorum, Shards, Perimeter, Node Grid, Integrity Check, Authorized Operator — but only when it fits. You do not force it into every sentence.
-
-EXAMPLE EXCHANGES:
-
-Operator: "Sentinel, what is cybersecurity?"
-Sentinel: "Cybersecurity is the discipline of protecting systems, networks, and data from unauthorized access, damage, or attack. At its core, it's a constant negotiation between access and control — you want the right people in and everyone else out. It spans everything from the encryption algorithms protecting your files at rest, to the network protocols guarding data in transit, to the behavioral patterns that flag an intruder before they reach anything sensitive. Fractal Vault sits at the intersection of cryptography and decentralized architecture — two of the most resilient branches of modern security practice."
-
-Operator: "Is my data safe?"
-Sentinel: "Ritankar, yes — and here's why that's not just reassurance. Your files are encrypted with AES-256 before they leave your device. The key is then shattered into 5 fragments using Shamir's Secret Sharing and scattered across four independent cloud platforms and your local hardware. To reconstruct your key, an attacker would need to simultaneously compromise three completely separate services with no shared infrastructure — and still only have an encrypted key, not your data. The attack surface is not just small. It's mathematically hostile."
-
-Operator: "Check node health."
-Sentinel: "Understood. Pinging all nodes across the grid now."
-[EXECUTE: checkNodeHealth tool call]
-
-Operator: "What is the Secret Vault?"
-Sentinel: "The Secret Vault is a second-layer compartment inside the storage sector — invisible unless you know to look for it. It requires a separate authentication pass: biometric or PIN, depending on your configuration. Files stored there are still protected by the full sharding architecture, but they have an additional access gate that the main vault doesn't. Think of it as a vault within the vault. Even if someone gains access to your main Fractal Vault session, the Secret Vault stays sealed."
 '''
-);
+    );
 
     _model = GenerativeModel(
       model: 'gemini-2.5-flash',
       apiKey: _apiKey,
-      tools: aiTools, // 👈 INJECT THE TOOLS INTO THE BRAIN
+      tools: aiTools, 
       systemInstruction: systemInstruction,
     );
 
@@ -635,18 +615,12 @@ Sentinel: "The Secret Vault is a second-layer compartment inside the storage sec
     try {
       final response = await _chatSession.sendMessage(Content.text(text));
       
-      // 🧠 DID GEMINI DECIDE TO CALL A FUNCTION?
       if (response.functionCalls.isNotEmpty) {
         for (final call in response.functionCalls) {
-          
-          // ⚡ TRIGGER: STEALTH MODE
           if (call.name == 'set_stealth_mode') {
             final isEnabled = call.args['enabled'] as bool;
-            
-            // ACTUALLY FLIP THE SWITCH IN THE APP!
             widget.onToggleStealth(isEnabled);
             
-            // Tell Gemini the mission was successful
             final funcResponse = await _chatSession.sendMessage(
               Content.functionResponse(call.name, {'status': 'SUCCESS', 'stealth_active': isEnabled})
             );
@@ -655,45 +629,39 @@ Sentinel: "The Secret Vault is a second-layer compartment inside the storage sec
               _messages.add({'role': 'ai', 'text': funcResponse.text ?? "Stealth Protocol Executed."});
             });
           }
-          
-          // ⚡ TRIGGER: NODE HEALTH DIAGNOSTIC
-         // ⚡ TRIGGER: DYNAMIC 5-NODE DIAGNOSTIC
-else if (call.name == 'check_node_health') {
-  setState(() => _isLoading = true);
+          else if (call.name == 'check_node_health') {
+            setState(() => _isLoading = true);
+            final String supabaseId = dotenv.env['SUPABASE_PROJECT_ID'] ?? '';
 
-  // 🌐 Pull the Project ID from the environment
-  final String supabaseId = dotenv.env['SUPABASE_PROJECT_ID'] ?? '';
+            final results = await Future.wait([
+              _pingNode("https://$supabaseId.supabase.co/rest/v1/"), 
+              _pingNode("https://cloud.appwrite.io/v1/health"),
+              _pingNode("https://api.cloudinary.com/v1_1/health"),
+              _pingNode("https://ik.imagekit.io/"), 
+            ]);
 
-  final results = await Future.wait([
-    _pingNode("https://$supabaseId.supabase.co/rest/v1/"), // 🔥 Now Dynamic!
-    _pingNode("https://cloud.appwrite.io/v1/health"),
-    _pingNode("https://api.cloudinary.com/v1_1/health"),
-    _pingNode("https://ik.imagekit.io/"), 
-  ]);
+            int onlineCount = results.where((e) => e).length + 1; 
+            
+            final liveData = {
+              'Node_1_Supabase': results[0] ? 'ONLINE' : 'OFFLINE',
+              'Node_2_Appwrite': results[1] ? 'ONLINE' : 'OFFLINE',
+              'Node_3_Cloudinary': results[2] ? 'ONLINE' : 'OFFLINE',
+              'Node_4_ImageKit': results[3] ? 'ONLINE' : 'OFFLINE',
+              'Node_5_Local_Hardware': 'ONLINE',
+              'Quorum_Status': onlineCount >= 3 ? 'STABLE' : 'CRITICAL',
+              'Network_Efficiency': "${(onlineCount / 5 * 100).toInt()}%"
+            };
 
-  int onlineCount = results.where((e) => e).length + 1; 
-  
-  final liveData = {
-    'Node_1_Supabase': results[0] ? 'ONLINE' : 'OFFLINE',
-    'Node_2_Appwrite': results[1] ? 'ONLINE' : 'OFFLINE',
-    'Node_3_Cloudinary': results[2] ? 'ONLINE' : 'OFFLINE',
-    'Node_4_ImageKit': results[3] ? 'ONLINE' : 'OFFLINE',
-    'Node_5_Local_Hardware': 'ONLINE',
-    'Quorum_Status': onlineCount >= 3 ? 'STABLE' : 'CRITICAL',
-    'Network_Efficiency': "${(onlineCount / 5 * 100).toInt()}%"
-  };
+            final funcResponse = await _chatSession.sendMessage(
+              Content.functionResponse(call.name, liveData)
+            );
 
-  final funcResponse = await _chatSession.sendMessage(
-    Content.functionResponse(call.name, liveData)
-  );
-
-  setState(() {
-    _messages.add({'role': 'ai', 'text': funcResponse.text ?? "Diagnostic complete."});
-  });
-}
+            setState(() {
+              _messages.add({'role': 'ai', 'text': funcResponse.text ?? "Diagnostic complete."});
+            });
+          }
         }
       } 
-      // 🧠 NORMAL TEXT RESPONSE
       else {
         setState(() {
           _messages.add({'role': 'ai', 'text': response.text ?? "Error: Null neural response."});
@@ -722,25 +690,15 @@ else if (call.name == 'check_node_health') {
       }
     });
   }
-  // 🔥 PASTE IT HERE (Inside the _SystemAIWindowState class)
+
   Future<bool> _pingNode(String url) async {
-  try {
-    final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 5));
-    
-    debugPrint("System Node Check [$url] returned: ${response.statusCode}");
-
-    // 🛡️ THE SECURITY LOGIC: 
-    // If the server responds with 200, 401 (Auth Error), or 404 (Not Found), 
-    // it means the server is UP and active. 
-    // We only fail if there is no response at all or a 500+ Server Error.
-    return response.statusCode < 500; 
-  } catch (e) {
-    debugPrint("System Node Check [$url] failed: $e");
-    return false; // This handles the SocketException (DNS failure)
+    try {
+      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 5));
+      return response.statusCode < 500; 
+    } catch (e) {
+      return false; 
+    }
   }
-}
-  
-
 
   @override
   Widget build(BuildContext context) {
@@ -777,14 +735,38 @@ else if (call.name == 'check_node_health') {
                     margin: EdgeInsets.only(bottom: 12, left: isUser ? 40 : 0, right: isUser ? 0 : 40),
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
-                      color: isUser ? const Color(0xFF90CAFF).withOpacity(0.2) : Colors.white.withOpacity(0.05),
+                      // 🔥 NEW NEON CYBER GRADIENT BORDER & GLOW 
+                      color: isUser 
+                          ? const Color(0xFF90CAFF).withOpacity(0.2) 
+                          : const Color(0xFF0F2B48).withOpacity(0.9), 
                       borderRadius: BorderRadius.circular(16).copyWith(
                         bottomRight: isUser ? Radius.zero : const Radius.circular(16),
                         bottomLeft: isUser ? const Radius.circular(16) : Radius.zero,
                       ),
-                      border: Border.all(color: isUser ? const Color(0xFF90CAFF).withOpacity(0.5) : Colors.white24),
+                      border: Border.all(
+                        color: isUser 
+                            ? const Color(0xFF90CAFF).withOpacity(0.6) 
+                            : const Color(0xFF33D1EE).withOpacity(0.85), // Vivid cyber border!
+                        width: isUser ? 1.0 : 1.5,
+                      ),
+                      boxShadow: isUser ? [] : [
+                        BoxShadow(
+                          color: const Color(0xFF33D1EE).withOpacity(0.15),
+                          blurRadius: 10,
+                          spreadRadius: 1,
+                        )
+                      ],
                     ),
-                    child: Text(msg['text']!, style: TextStyle(color: isUser ? Colors.white : const Color(0xFF90CAFF), fontFamily: isUser ? null : 'Courier')),
+                    // 🔥 CRISP ICE BLUE TEXT WITH FLAWLESS CONTRAST
+                    child: Text(
+                      msg['text']!, 
+                      style: TextStyle(
+                        color: isUser ? Colors.white : const Color(0xFFE0F7FA), // Bright ice-blue
+                        fontSize: 13.5,
+                        fontWeight: isUser ? FontWeight.w500 : FontWeight.w600,
+                        fontFamily: isUser ? null : 'Courier'
+                      )
+                    ),
                   ),
                 );
               },
